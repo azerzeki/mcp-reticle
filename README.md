@@ -78,7 +78,7 @@ just dev
 
 ### 2. The Wrapper Pattern
 
-Instead of running your MCP server directly, wrap it with `mcp-sentinel` (the CLI proxy):
+Instead of running your MCP server directly, wrap it with `reticle` (the CLI proxy):
 
 **Before (Claude Desktop Config):**
 ```json
@@ -97,7 +97,7 @@ Instead of running your MCP server directly, wrap it with `mcp-sentinel` (the CL
 {
   "mcpServers": {
     "filesystem": {
-      "command": "mcp-sentinel",
+      "command": "reticle",
       "args": ["--port", "3001", "--", "npx", "-y", "@modelcontextprotocol/server-filesystem", "/Users/me/work"]
     }
   }
@@ -153,7 +153,7 @@ Edit `~/Library/Application Support/Claude/claude_desktop_config.json`:
 {
   "mcpServers": {
     "my-server": {
-      "command": "mcp-sentinel",
+      "command": "reticle",
       "args": ["--port", "3001", "--", "python", "-m", "my_mcp_server"]
     }
   }
@@ -168,7 +168,7 @@ In Cline's MCP configuration:
 {
   "mcp.servers": {
     "my-server": {
-      "command": "mcp-sentinel",
+      "command": "reticle",
       "args": ["--port", "3001", "--", "node", "server.js"]
     }
   }
@@ -177,7 +177,7 @@ In Cline's MCP configuration:
 
 ### 5ire / Other Clients
 
-Same pattern — wrap your server command with `mcp-sentinel`.
+Same pattern — wrap your server command with `reticle`.
 
 ---
 
@@ -186,7 +186,7 @@ Same pattern — wrap your server command with `mcp-sentinel`.
 ```
 ┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
 │   MCP Client    │────▶│     Reticle     │────▶│   MCP Server    │
-│ (Claude, Cline) │◀────│  (mcp-sentinel) │◀────│  (your tool)    │
+│ (Claude, Cline) │◀────│    (reticle)    │◀────│  (your tool)    │
 └─────────────────┘     └────────┬────────┘     └─────────────────┘
                                  │
                                  ▼
@@ -198,7 +198,7 @@ Same pattern — wrap your server command with `mcp-sentinel`.
 
 ### How It Works
 
-1. **mcp-sentinel** wraps your MCP server process
+1. **reticle** wraps your MCP server process
 2. All stdin/stdout traffic passes through the proxy
 3. Messages are forwarded to the Reticle GUI via Tauri events
 4. Zero-copy forwarding ensures microsecond latency
@@ -333,7 +333,7 @@ just build    # Desktop app (macOS/Linux/Windows)
 
 ### No messages appearing?
 
-1. Verify mcp-sentinel is wrapping your server correctly
+1. Verify reticle is wrapping your server correctly
 2. Check that the Reticle GUI is running and connected
 3. Look at the terminal for error messages
 4. See [TESTING.md](TESTING.md) for detailed debugging

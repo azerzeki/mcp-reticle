@@ -125,6 +125,7 @@ fn extract_method(value: &serde_json::Value) -> Option<String> {
 
 /// JSON-RPC 2.0 Request structure
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[allow(dead_code)]
 pub struct JsonRpcRequest {
     pub jsonrpc: String,
     pub id: Option<serde_json::Value>,
@@ -134,6 +135,7 @@ pub struct JsonRpcRequest {
 
 /// JSON-RPC 2.0 Response structure
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[allow(dead_code)]
 pub struct JsonRpcResponse {
     pub jsonrpc: String,
     pub id: serde_json::Value,
@@ -145,6 +147,7 @@ pub struct JsonRpcResponse {
 
 /// JSON-RPC 2.0 Error structure
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[allow(dead_code)]
 pub struct JsonRpcError {
     pub code: i64,
     pub message: String,
@@ -154,6 +157,7 @@ pub struct JsonRpcError {
 
 /// JSON-RPC 2.0 Notification structure (no id field)
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[allow(dead_code)]
 pub struct JsonRpcNotification {
     pub jsonrpc: String,
     pub method: String,
