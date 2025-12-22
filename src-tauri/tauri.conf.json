@@ -1,0 +1,45 @@
+{
+  "$schema": "https://schema.tauri.app/config/2.0.0",
+  "productName": "Reticle",
+  "version": "0.1.0",
+  "identifier": "com.reticle.app",
+  "build": {
+    "devUrl": "http://localhost:1420",
+    "beforeBuildCommand": "cd ../frontend && npm run build",
+    "frontendDist": "../frontend/dist"
+  },
+  "bundle": {
+    "active": false
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "Reticle - MCP Protocol Debugger",
+        "width": 1400,
+        "height": 900,
+        "resizable": true,
+        "fullscreen": false,
+        "center": true,
+        "minWidth": 1000,
+        "minHeight": 600
+      }
+    ],
+    "security": {
+      "csp": null,
+      "capabilities": [
+        {
+          "identifier": "main-capability",
+          "description": "Capability for the main window",
+          "windows": ["main"],
+          "permissions": [
+            "core:default",
+            "core:event:allow-listen",
+            "core:event:allow-emit",
+            "dialog:allow-save",
+            "dialog:default"
+          ]
+        }
+      ]
+    }
+  }
+}

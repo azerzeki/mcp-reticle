@@ -1,0 +1,382 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  /* Light Mode - Cleanroom Laboratory Theme */
+  :root {
+    /* Background: Cleanroom White #F9FAFB */
+    --background: 210 20% 98%;
+    /* Foreground: Carbon Fiber #111827 */
+    --foreground: 221 39% 11%;
+    --card: 210 20% 96%;
+    --card-foreground: 221 39% 11%;
+    --popover: 210 20% 98%;
+    --popover-foreground: 221 39% 11%;
+    /* Primary: Optic Azure #00808F */
+    --primary: 186 100% 28%;
+    --primary-foreground: 210 20% 98%;
+    /* Secondary: Chassis Gray #6B7280 */
+    --secondary: 220 9% 46%;
+    --secondary-foreground: 210 20% 98%;
+    --muted: 210 14% 93%;
+    --muted-foreground: 220 9% 46%; /* Chassis Gray */
+    --accent: 210 14% 93%;
+    --accent-foreground: 221 39% 11%;
+    /* Destructive: Fatal Crimson #DC2626 */
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 210 20% 98%;
+    --border: 214 14% 86%;
+    --input: 214 14% 86%;
+    --ring: 186 100% 28%;
+    --radius: 0.5rem;
+
+    /* Semantic Colors */
+    --success: 160 84% 39%; /* Verified Emerald #059669 */
+    --success-foreground: 210 20% 98%;
+    --warning: 32 95% 44%; /* Hazard Orange #D97706 */
+    --warning-foreground: 210 20% 98%;
+  }
+
+  /* Dark Mode (Primary) - Abyssal Void Palette */
+  .dark {
+    /* Background: Abyssal Void #0D1117 */
+    --background: 215 28% 7%;
+    --foreground: 210 10% 96%;
+
+    /* Glass Panels - slightly elevated from background */
+    --card: 215 24% 10%;
+    --card-foreground: 210 10% 96%;
+
+    --popover: 215 24% 10%;
+    --popover-foreground: 210 10% 96%;
+
+    /* Primary: Reticle Cyan #00F0FF */
+    --primary: 184 100% 50%;
+    --primary-foreground: 215 28% 7%;
+
+    /* Secondary: System Gray #8B949E */
+    --secondary: 212 10% 18%;
+    --secondary-foreground: 212 10% 58%;
+
+    --muted: 215 20% 14%;
+    --muted-foreground: 212 10% 58%; /* System Gray */
+
+    /* Selection/Hover */
+    --accent: 215 20% 14%;
+    --accent-foreground: 210 10% 96%;
+
+    /* Error States: Critical Red #FF003C */
+    --destructive: 346 100% 50%;
+    --destructive-foreground: 210 10% 96%;
+
+    /* Borders */
+    --border: 215 20% 18%;
+    --input: 215 20% 18%;
+    --ring: 184 100% 50%;
+
+    /* Semantic Colors */
+    --success: 157 100% 50%; /* Terminal Green #00FF9F */
+    --success-foreground: 215 28% 7%;
+    --warning: 57 97% 51%; /* Signal Amber #FCEE09 */
+    --warning-foreground: 215 28% 7%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-family: 'Geist Sans', ui-sans-serif, system-ui, -apple-system, sans-serif;
+    font-feature-settings: 'cv11', 'ss01';
+    font-optical-sizing: auto;
+  }
+
+  code, kbd, samp, pre {
+    font-family: 'JetBrains Mono', 'Geist Mono', ui-monospace, monospace;
+    font-feature-settings: 'calt' 1, 'liga' 1;
+  }
+}
+
+@layer utilities {
+  /* === PREMIUM GLASS EFFECTS === */
+  .glass {
+    @apply bg-card/60 backdrop-blur-md border border-border;
+  }
+
+  .dark .glass {
+    background: rgba(13, 17, 23, 0.6); /* Abyssal Void */
+    @apply border-white/10;
+  }
+
+  .glass-strong {
+    @apply bg-card/80 backdrop-blur-xl border border-border;
+  }
+
+  .dark .glass-strong {
+    background: rgba(13, 17, 23, 0.8); /* Abyssal Void */
+    @apply border-white/10;
+  }
+
+  /* === GLOW EFFECTS (LED Indicators) === */
+  /* Primary: Reticle Cyan #00F0FF */
+  .glow-primary {
+    box-shadow: 0 0 20px rgba(0, 240, 255, 0.4), 0 0 40px rgba(0, 240, 255, 0.2);
+  }
+
+  /* Success: Terminal Green #00FF9F */
+  .glow-success {
+    box-shadow: 0 0 20px rgba(0, 255, 159, 0.4), 0 0 40px rgba(0, 255, 159, 0.2);
+  }
+
+  /* Error: Critical Red #FF003C */
+  .glow-error {
+    box-shadow: 0 0 20px rgba(255, 0, 60, 0.4), 0 0 40px rgba(255, 0, 60, 0.2);
+  }
+
+  /* Warning: Signal Amber #FCEE09 */
+  .glow-warning {
+    box-shadow: 0 0 20px rgba(252, 238, 9, 0.4), 0 0 40px rgba(252, 238, 9, 0.2);
+  }
+
+  .text-glow {
+    text-shadow: 0 0 20px currentColor;
+  }
+
+  /* === SUBTLE NOISE TEXTURE (Reduces Banding) === */
+  .noise-overlay {
+    position: relative;
+  }
+
+  .noise-overlay::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    opacity: 0.03;
+    background-image: url('data:image/svg+xml,<svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg"><filter id="noise"><feTurbulence baseFrequency="0.9" numOctaves="3" stitchTiles="stitch"/></filter><rect width="100%" height="100%" filter="url(%23noise)"/></svg>');
+    pointer-events: none;
+    z-index: 1;
+  }
+
+  /* === SCROLLBAR (Thin, Premium) === */
+  .scrollbar-thin::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-track {
+    @apply bg-transparent;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    @apply bg-muted-foreground/30 hover:bg-muted-foreground/50 rounded-full;
+  }
+
+  .dark .scrollbar-thin::-webkit-scrollbar-thumb {
+    @apply bg-zinc-700 hover:bg-zinc-600;
+  }
+
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  /* === LOG ROW ANIMATIONS === */
+  @keyframes slideInRight {
+    from {
+      opacity: 0;
+      transform: translateX(-8px);
+    }
+    to {
+      opacity: 1;
+      transform: translateX(0);
+    }
+  }
+
+  .log-row-enter {
+    animation: slideInRight 0.15s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  /* === PULSE ANIMATION (Connection Indicator) === */
+  @keyframes pulse-glow {
+    0%, 100% {
+      opacity: 1;
+      box-shadow: 0 0 8px currentColor;
+    }
+    50% {
+      opacity: 0.6;
+      box-shadow: 0 0 16px currentColor;
+    }
+  }
+
+  .animate-pulse-glow {
+    animation: pulse-glow 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  }
+
+  /* === COMMAND PALETTE STYLING === */
+  .command-palette {
+    @apply glass-strong rounded-lg shadow-2xl;
+    box-shadow: 0 0 60px rgba(0, 240, 255, 0.15), /* Reticle Cyan */
+                0 20px 40px rgba(0, 0, 0, 0.4);
+  }
+
+  /* === PANEL RESIZE HANDLE === */
+  [data-panel-resize-handle-enabled] {
+    @apply bg-transparent transition-all duration-200;
+    backdrop-filter: blur(4px);
+  }
+
+  [data-panel-resize-handle-enabled]:hover {
+    background: rgba(0, 240, 255, 0.2); /* Reticle Cyan */
+    box-shadow: 0 0 20px rgba(0, 240, 255, 0.3);
+  }
+
+  /* === STATUS BADGES === */
+  /* Light: Verified Emerald #059669, Dark: Terminal Green #00FF9F */
+  .badge-success {
+    @apply border;
+    background: rgba(5, 150, 105, 0.1);
+    color: #059669;
+    border-color: rgba(5, 150, 105, 0.2);
+  }
+  .dark .badge-success {
+    background: rgba(0, 255, 159, 0.1);
+    color: #00FF9F;
+    border-color: rgba(0, 255, 159, 0.2);
+  }
+
+  /* Light: Fatal Crimson #DC2626, Dark: Critical Red #FF003C */
+  .badge-error {
+    @apply border;
+    background: rgba(220, 38, 38, 0.1);
+    color: #DC2626;
+    border-color: rgba(220, 38, 38, 0.2);
+  }
+  .dark .badge-error {
+    background: rgba(255, 0, 60, 0.1);
+    color: #FF003C;
+    border-color: rgba(255, 0, 60, 0.2);
+  }
+
+  /* Light: Hazard Orange #D97706, Dark: Signal Amber #FCEE09 */
+  .badge-warning {
+    @apply border;
+    background: rgba(217, 119, 6, 0.1);
+    color: #D97706;
+    border-color: rgba(217, 119, 6, 0.2);
+  }
+  .dark .badge-warning {
+    background: rgba(252, 238, 9, 0.1);
+    color: #FCEE09;
+    border-color: rgba(252, 238, 9, 0.2);
+  }
+
+  /* Light: Optic Azure #00808F, Dark: Reticle Cyan #00F0FF */
+  .badge-info {
+    @apply border;
+    background: rgba(0, 128, 143, 0.1);
+    color: #00808F;
+    border-color: rgba(0, 128, 143, 0.2);
+  }
+  .dark .badge-info {
+    background: rgba(0, 240, 255, 0.1);
+    color: #00F0FF;
+    border-color: rgba(0, 240, 255, 0.2);
+  }
+
+  /* === MONACO EDITOR CONTAINER === */
+  .monaco-editor-container {
+    @apply border border-border rounded-lg overflow-hidden bg-card/60;
+    backdrop-filter: blur(8px);
+  }
+
+  .dark .monaco-editor-container {
+    @apply border-white/10;
+    background: rgba(13, 17, 23, 0.6); /* Abyssal Void */
+  }
+
+  /* === JSON SYNTAX HIGHLIGHTING (For non-Monaco displays) === */
+  /* Keys: Light: Optic Azure #00808F, Dark: Reticle Cyan #00F0FF */
+  .json-key {
+    color: #00808F;
+  }
+  .dark .json-key {
+    color: #00F0FF;
+  }
+
+  /* Strings: Light: Verified Emerald #059669, Dark: Terminal Green #00FF9F */
+  .json-string {
+    color: #059669;
+  }
+  .dark .json-string {
+    color: #00FF9F;
+  }
+
+  /* Numbers: Light: Hazard Orange #D97706, Dark: Signal Amber #FCEE09 */
+  .json-number {
+    color: #D97706;
+  }
+  .dark .json-number {
+    color: #FCEE09;
+  }
+
+  /* Booleans: Light: Chassis Gray #6B7280, Dark: System Gray #8B949E */
+  .json-boolean {
+    color: #6B7280;
+  }
+  .dark .json-boolean {
+    color: #8B949E;
+  }
+
+  .json-null {
+    @apply text-muted-foreground;
+  }
+
+  /* === SKELETON LOADER === */
+  .skeleton {
+    @apply animate-pulse bg-muted;
+  }
+
+  /* === SPRING ANIMATIONS (Framer Motion) === */
+  .spring-bounce {
+    animation-timing-function: cubic-bezier(0.68, -0.55, 0.265, 1.55);
+  }
+}
+
+/* === CONNECTION STATUS INDICATOR === */
+.status-indicator {
+  @apply relative;
+}
+
+.status-indicator::before {
+  content: '';
+  @apply absolute -left-3 top-1/2 -translate-y-1/2 w-2 h-2 rounded-full;
+}
+
+.status-indicator.connected::before {
+  background: #00FF9F; /* Terminal Green */
+  @apply animate-pulse-glow;
+}
+
+.status-indicator.disconnected::before {
+  background: #FF003C; /* Critical Red */
+}
+
+/* === ANTI-ALIASING ENHANCEMENT === */
+* {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* === SELECTION STYLING === */
+::selection {
+  background: rgba(0, 240, 255, 0.3); /* Reticle Cyan */
+  color: #f0f6fc;
+}

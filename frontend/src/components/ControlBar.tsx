@@ -1,0 +1,486 @@
+import { useState } from 'react'
+import { Play, Pause, Settings, Loader2, RotateCcw, Circle, Database, Download, Trash2 } from 'lucide-react'
+import { toast } from 'sonner'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { useReticleStore } from '@/store'
+import { invoke } from '@tauri-apps/api/core'
+import { listen } from '@tauri-apps/api/event'
+import { save } from '@tauri-apps/plugin-dialog'
+import { ThemeToggle } from '@/components/ThemeToggle'
+import { useEffect } from 'react'
+
+// Transport type definitions
+type TransportType = 'stdio' | 'http'
+
+interface StdioConfig {
+  type: 'stdio'
+  command: string
+  args: string[]
+}
+
+interface HttpConfig {
+  type: 'http'
+  server_url: string
+  proxy_port: number
+}
+
+type TransportConfig = StdioConfig | HttpConfig
+
+interface RecordedSession {
+  id: string
+  name: string
+  started_at: number
+  ended_at: number
+  message_count: number
+  transport_type: string
+}
+
+export function ControlBar() {
+  // Proxy state
+  const [isProxyRunning, setIsProxyRunning] = useState(false)
+  const [isProxyLoading, setIsProxyLoading] = useState(false)
+  const [showConfig, setShowConfig] = useState(false)
+  const [transportType, setTransportType] = useState<TransportType>('stdio')
+  const [command, setCommand] = useState('python3')
+  const [args, setArgs] = useState('scripts/mock-mcp-server.py')
+  const [serverUrl, setServerUrl] = useState('http://localhost:8080')
+  const [proxyPort, setProxyPort] = useState(3001)
+
+  // Recording state
+  const [isRecording, setIsRecording] = useState(false)
+  const [isRecordingLoading, setIsRecordingLoading] = useState(false)
+  const [recordedSessions, setRecordedSessions] = useState<RecordedSession[]>([])
+  const [showSessions, setShowSessions] = useState(false)
+
+  const { clearLogs } = useReticleStore()
+
+  // Load recorded sessions on mount
+  useEffect(() => {
+    loadSessions()
+
+    let unsubscribeStarted: (() => void) | null = null
+    let unsubscribeStopped: (() => void) | null = null
+
+    const setupListeners = async () => {
+      unsubscribeStarted = await listen<{ session_id: string; session_name: string }>(
+        'recording-started',
+        (event) => {
+          setIsRecording(true)
+          toast.success('Recording started', {
+            description: `Session: ${event.payload.session_name}`,
+          })
+          checkRecordingStatus()
+        }
+      )
+
+      unsubscribeStopped = await listen<{ message_count: number; duration_ms: number }>(
+        'recording-stopped',
+        () => {
+          setIsRecording(false)
+          toast.success('Recording stopped')
+          checkRecordingStatus()
+          loadSessions()
+        }
+      )
+    }
+
+    setupListeners()
+
+    // Cleanup listeners on unmount
+    return () => {
+      if (unsubscribeStarted) unsubscribeStarted()
+      if (unsubscribeStopped) unsubscribeStopped()
+    }
+  }, [])
+
+  const loadSessions = async () => {
+    try {
+      const sessions = await invoke<RecordedSession[]>('list_recorded_sessions')
+
+      // Deduplicate sessions by ID (just in case)
+      const uniqueSessions = sessions.reduce((acc, session) => {
+        if (!acc.find(s => s.id === session.id)) {
+          acc.push(session)
+        }
+        return acc
+      }, [] as RecordedSession[])
+
+      setRecordedSessions(uniqueSessions)
+    } catch (error) {
+      console.error('Failed to load sessions:', error)
+    }
+  }
+
+  const checkRecordingStatus = async () => {
+    try {
+      const status = await invoke<{
+        is_recording: boolean
+        session_id?: string
+        message_count: number
+        duration_seconds: number
+      }>('get_recording_status')
+      setIsRecording(status.is_recording)
+    } catch (error) {
+      console.error('Failed to check recording status:', error)
+    }
+  }
+
+  // Proxy controls
+  const startDemo = async () => {
+    setIsProxyLoading(true)
+    try {
+      await invoke('start_proxy', { command: 'demo', args: [] })
+      setIsProxyRunning(true)
+      toast.success('Demo started successfully')
+    } catch (error) {
+      toast.error('Failed to start demo', {
+        description: error instanceof Error ? error.message : 'Unknown error',
+      })
+    } finally {
+      setIsProxyLoading(false)
+    }
+  }
+
+  const startProxy = async () => {
+    setIsProxyLoading(true)
+    try {
+      let transportConfig: TransportConfig
+
+      if (transportType === 'stdio') {
+        const argsList = args.split(' ').filter((a) => a.trim())
+        transportConfig = { type: 'stdio', command, args: argsList }
+      } else {
+        transportConfig = { type: 'http', server_url: serverUrl, proxy_port: proxyPort }
+      }
+
+      await invoke('start_proxy_v2', { transportConfig })
+      setIsProxyRunning(true)
+      toast.success('Proxy started successfully')
+      setShowConfig(false)
+    } catch (error) {
+      toast.error('Failed to start proxy', {
+        description: error instanceof Error ? error.message : 'Unknown error',
+      })
+    } finally {
+      setIsProxyLoading(false)
+    }
+  }
+
+  const stopProxy = async () => {
+    setIsProxyLoading(true)
+    try {
+      await invoke('stop_proxy')
+      setIsProxyRunning(false)
+      toast.success('Proxy stopped')
+    } catch (error) {
+      toast.error('Failed to stop proxy', {
+        description: error instanceof Error ? error.message : 'Unknown error',
+      })
+    } finally {
+      setIsProxyLoading(false)
+    }
+  }
+
+  // Recording controls
+  const startRecording = async () => {
+    setIsRecordingLoading(true)
+    try {
+      await invoke('start_recording', { sessionName: null })
+      toast.success('Recording started')
+      checkRecordingStatus()
+    } catch (error) {
+      toast.error('Failed to start recording', {
+        description: error instanceof Error ? error.message : 'Unknown error',
+      })
+    } finally {
+      setIsRecordingLoading(false)
+    }
+  }
+
+  const stopRecording = async () => {
+    setIsRecordingLoading(true)
+    try {
+      await invoke('stop_recording')
+      toast.success('Recording stopped and saved')
+      loadSessions()
+      checkRecordingStatus()
+    } catch (error) {
+      console.error('Stop recording error:', error)
+      const errorMessage = typeof error === 'string' ? error : (error instanceof Error ? error.message : 'Unknown error')
+      toast.error('Failed to stop recording', {
+        description: errorMessage,
+      })
+    } finally {
+      setIsRecordingLoading(false)
+    }
+  }
+
+  const exportSession = async (sessionId: string, name: string) => {
+    try {
+      // Sanitize filename: replace spaces with hyphens and remove special chars
+      const sanitizedName = name
+        .replace(/\s+/g, '-')
+        .replace(/[^a-zA-Z0-9-_]/g, '')
+        .toLowerCase()
+
+      // Open save dialog
+      const filePath = await save({
+        defaultPath: `${sanitizedName}.json`,
+        filters: [{
+          name: 'JSON',
+          extensions: ['json']
+        }]
+      })
+
+      if (!filePath) {
+        return // User cancelled
+      }
+
+      // Export to selected path
+      await invoke('export_session', { sessionId, exportPath: filePath })
+      toast.success(`Session exported`, { description: `Saved to: ${filePath}` })
+    } catch (error) {
+      toast.error('Failed to export session', {
+        description: error instanceof Error ? error.message : 'Unknown error',
+      })
+    }
+  }
+
+  const deleteSession = async (sessionId: string) => {
+    try {
+      await invoke('delete_recorded_session', { sessionId })
+      toast.success('Session deleted')
+      loadSessions()
+    } catch (error) {
+      toast.error('Failed to delete session', {
+        description: error instanceof Error ? error.message : 'Unknown error',
+      })
+    }
+  }
+
+  return (
+    <div className="border-b border-border bg-card/50 backdrop-blur-sm relative z-50">
+      <div className="flex items-center justify-between px-4 py-2 gap-4">
+        {/* Left: Proxy Controls */}
+        <div className="flex items-center gap-2">
+          <Button
+            onClick={startDemo}
+            disabled={isProxyRunning || isProxyLoading}
+            size="sm"
+            variant="outline"
+            className="h-8 gap-1.5"
+          >
+            {isProxyLoading ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <Play className="h-3.5 w-3.5" />
+            )}
+            <span className="text-xs">Demo</span>
+          </Button>
+
+          <div className="relative">
+            <Button
+              onClick={() => setShowConfig(!showConfig)}
+              disabled={isProxyRunning}
+              size="sm"
+              variant="outline"
+              className="h-8 gap-1.5"
+            >
+              <Settings className="h-3.5 w-3.5" />
+              <span className="text-xs">Proxy</span>
+            </Button>
+
+            {showConfig && (
+              <div className="absolute top-full left-0 mt-1 z-[100] w-80 bg-card border border-border rounded-lg shadow-lg p-3">
+                <div className="space-y-3">
+                  <div className="flex gap-2">
+                    <Button
+                      onClick={() => setTransportType('stdio')}
+                      size="sm"
+                      variant={transportType === 'stdio' ? 'default' : 'outline'}
+                      className="flex-1 h-7 text-xs"
+                    >
+                      Stdio
+                    </Button>
+                    <Button
+                      onClick={() => setTransportType('http')}
+                      size="sm"
+                      variant={transportType === 'http' ? 'default' : 'outline'}
+                      className="flex-1 h-7 text-xs"
+                    >
+                      HTTP/SSE
+                    </Button>
+                  </div>
+
+                  {transportType === 'stdio' ? (
+                    <>
+                      <Input
+                        value={command}
+                        onChange={(e) => setCommand(e.target.value)}
+                        placeholder="Command (e.g., python3)"
+                        className="h-8 text-xs"
+                      />
+                      <Input
+                        value={args}
+                        onChange={(e) => setArgs(e.target.value)}
+                        placeholder="Arguments"
+                        className="h-8 text-xs"
+                      />
+                    </>
+                  ) : (
+                    <>
+                      <Input
+                        value={serverUrl}
+                        onChange={(e) => setServerUrl(e.target.value)}
+                        placeholder="Server URL"
+                        className="h-8 text-xs"
+                      />
+                      <Input
+                        type="number"
+                        value={proxyPort}
+                        onChange={(e) => setProxyPort(parseInt(e.target.value))}
+                        placeholder="Proxy Port"
+                        className="h-8 text-xs"
+                      />
+                    </>
+                  )}
+
+                  <Button onClick={startProxy} size="sm" className="w-full h-7 text-xs">
+                    <Play className="h-3 w-3 mr-1" />
+                    Start Proxy
+                  </Button>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {isProxyRunning && (
+            <Button
+              onClick={stopProxy}
+              disabled={isProxyLoading}
+              size="sm"
+              variant="destructive"
+              className="h-8 gap-1.5"
+            >
+              {isProxyLoading ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Pause className="h-3.5 w-3.5" />
+              )}
+              <span className="text-xs">Stop</span>
+            </Button>
+          )}
+
+          <Button
+            onClick={clearLogs}
+            size="sm"
+            variant="ghost"
+            className="h-8 gap-1.5"
+          >
+            <RotateCcw className="h-3.5 w-3.5" />
+            <span className="text-xs">Clear</span>
+          </Button>
+        </div>
+
+        {/* Center: Recording Controls */}
+        <div className="flex items-center gap-2">
+          {!isRecording ? (
+            <Button
+              onClick={startRecording}
+              disabled={isRecordingLoading}
+              size="sm"
+              variant="outline"
+              className="h-8 gap-1.5"
+            >
+              {isRecordingLoading ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Circle className="h-3.5 w-3.5 fill-[#FF003C] text-[#FF003C]" />
+              )}
+              <span className="text-xs">Record</span>
+            </Button>
+          ) : (
+            <Button
+              onClick={stopRecording}
+              disabled={isRecordingLoading}
+              size="sm"
+              variant="destructive"
+              className="h-8 gap-1.5 animate-pulse"
+            >
+              {isRecordingLoading ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Circle className="h-3.5 w-3.5 fill-white" />
+              )}
+              <span className="text-xs">Stop Recording</span>
+            </Button>
+          )}
+
+          <div className="relative">
+            <Button
+              onClick={() => setShowSessions(!showSessions)}
+              size="sm"
+              variant="ghost"
+              className="h-8 gap-1.5"
+            >
+              <Database className="h-3.5 w-3.5" />
+              <span className="text-xs">Sessions ({recordedSessions.length})</span>
+            </Button>
+
+            {showSessions && (
+              <div className="absolute top-full right-0 mt-1 z-[100] w-96 max-h-80 overflow-y-auto bg-card border border-border rounded-lg shadow-lg">
+                {recordedSessions.length === 0 ? (
+                  <div className="p-4 text-center text-sm text-muted-foreground">
+                    No recorded sessions
+                  </div>
+                ) : (
+                  <div className="divide-y divide-border">
+                    {recordedSessions.map((session) => (
+                      <div key={session.id} className="p-3 hover:bg-muted/50">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="flex-1 min-w-0">
+                            <div className="text-sm font-medium text-foreground truncate">
+                              {session.name}
+                            </div>
+                            <div className="text-xs text-muted-foreground mt-0.5">
+                              {session.message_count} messages • {session.transport_type}
+                            </div>
+                            <div className="text-xs text-muted-foreground/70">
+                              {new Date(session.started_at).toLocaleString()}
+                            </div>
+                          </div>
+                          <div className="flex gap-1">
+                            <Button
+                              onClick={() => exportSession(session.id, session.name)}
+                              size="sm"
+                              variant="ghost"
+                              className="h-7 w-7 p-0"
+                            >
+                              <Download className="h-3.5 w-3.5" />
+                            </Button>
+                            <Button
+                              onClick={() => deleteSession(session.id)}
+                              size="sm"
+                              variant="ghost"
+                              className="h-7 w-7 p-0 text-[#FF003C] hover:text-[#FF003C]/80"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Right: Theme Toggle */}
+        <ThemeToggle />
+      </div>
+    </div>
+  )
+}
