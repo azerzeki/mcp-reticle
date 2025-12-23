@@ -318,6 +318,27 @@ async fn handle_post(
         Err(e) => {
             error!("Failed to connect to upstream server: {}", e);
             eprintln!("[STREAMABLE PROXY ERROR] Upstream error: {e}");
+
+            // Emit error as a log event so it appears in the UI
+            let error_id = generate_message_id();
+            let error_json = serde_json::json!({
+                "jsonrpc": "2.0",
+                "error": {
+                    "code": -32603,
+                    "message": "Connection failed",
+                    "data": format!("{e}")
+                }
+            });
+            let error_entry = LogEntry::new(
+                error_id,
+                state.session_id.clone(),
+                Direction::Out,
+                error_json.clone(),
+            );
+            if let Err(emit_err) = state.app_handle.emit("log-event", &error_entry) {
+                warn!("Failed to emit connection error log event: {}", emit_err);
+            }
+
             (
                 StatusCode::BAD_GATEWAY,
                 Json(serde_json::json!({
@@ -446,6 +467,26 @@ async fn handle_get(
         }
         Err(e) => {
             error!("Failed to connect to upstream SSE: {}", e);
+
+            // Emit error as a log event so it appears in the UI
+            let error_id = generate_message_id();
+            let error_json = serde_json::json!({
+                "error": {
+                    "code": -32000,
+                    "message": "SSE connection failed",
+                    "data": format!("{e}")
+                }
+            });
+            let error_entry = LogEntry::new(
+                error_id,
+                state.session_id.clone(),
+                Direction::Out,
+                error_json,
+            );
+            if let Err(emit_err) = state.app_handle.emit("log-event", &error_entry) {
+                warn!("Failed to emit SSE error log event: {}", emit_err);
+            }
+
             (
                 StatusCode::BAD_GATEWAY,
                 format!("Failed to connect to upstream SSE: {e}"),
@@ -496,6 +537,26 @@ async fn handle_delete(
         }
         Err(e) => {
             error!("Failed to send DELETE to upstream: {}", e);
+
+            // Emit error as a log event so it appears in the UI
+            let error_id = generate_message_id();
+            let error_json = serde_json::json!({
+                "error": {
+                    "code": -32000,
+                    "message": "Session termination failed",
+                    "data": format!("{e}")
+                }
+            });
+            let error_entry = LogEntry::new(
+                error_id,
+                state.session_id.clone(),
+                Direction::Out,
+                error_json,
+            );
+            if let Err(emit_err) = state.app_handle.emit("log-event", &error_entry) {
+                warn!("Failed to emit DELETE error log event: {}", emit_err);
+            }
+
             (
                 StatusCode::BAD_GATEWAY,
                 format!("Failed to terminate session: {e}"),

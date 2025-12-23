@@ -139,6 +139,26 @@ async fn handle_websocket(client_socket: WebSocket, state: WebSocketProxyState) 
         Err(e) => {
             error!("Failed to connect to upstream WebSocket: {}", e);
             eprintln!("[WEBSOCKET PROXY ERROR] Failed to connect to upstream: {e}");
+
+            // Emit error as a log event so it appears in the UI
+            let error_id = generate_message_id();
+            let error_json = serde_json::json!({
+                "error": {
+                    "code": -32000,
+                    "message": "WebSocket connection failed",
+                    "data": format!("{e}")
+                }
+            });
+            let error_entry = LogEntry::new(
+                error_id,
+                state.session_id.clone(),
+                Direction::Out,
+                error_json,
+            );
+            if let Err(emit_err) = state.app_handle.emit("log-event", &error_entry) {
+                warn!("Failed to emit WebSocket error log event: {}", emit_err);
+            }
+
             return;
         }
     };
@@ -237,6 +257,26 @@ async fn handle_websocket(client_socket: WebSocket, state: WebSocketProxyState) 
                 }
                 Err(e) => {
                     error!("Error reading from client: {}", e);
+
+                    // Emit error as a log event so it appears in the UI
+                    let error_id = generate_message_id();
+                    let error_json = serde_json::json!({
+                        "error": {
+                            "code": -32000,
+                            "message": "Client read error",
+                            "data": format!("{e}")
+                        }
+                    });
+                    let error_entry = LogEntry::new(
+                        error_id,
+                        session_id_clone.clone(),
+                        Direction::In,
+                        error_json,
+                    );
+                    if let Err(emit_err) = app_handle_clone.emit("log-event", &error_entry) {
+                        warn!("Failed to emit client error log event: {}", emit_err);
+                    }
+
                     break;
                 }
             }
@@ -321,6 +361,26 @@ async fn handle_websocket(client_socket: WebSocket, state: WebSocketProxyState) 
                 }
                 Err(e) => {
                     error!("Error reading from upstream: {}", e);
+
+                    // Emit error as a log event so it appears in the UI
+                    let error_id = generate_message_id();
+                    let error_json = serde_json::json!({
+                        "error": {
+                            "code": -32000,
+                            "message": "Upstream read error",
+                            "data": format!("{e}")
+                        }
+                    });
+                    let error_entry = LogEntry::new(
+                        error_id,
+                        session_id_clone.clone(),
+                        Direction::Out,
+                        error_json,
+                    );
+                    if let Err(emit_err) = app_handle_clone.emit("log-event", &error_entry) {
+                        warn!("Failed to emit upstream error log event: {}", emit_err);
+                    }
+
                     break;
                 }
             }
