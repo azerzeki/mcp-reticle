@@ -80,8 +80,8 @@ impl LogEntry {
         let method = extract_method(&content);
         let content_str = serde_json::to_string(&content).unwrap_or_default();
 
-        // Estimate token count using the token counter
-        let token_count = super::token_counter::TokenCounter::estimate_tokens(&content_str);
+        // Count LLM-relevant tokens (extracts payload, not JSON-RPC overhead)
+        let token_count = super::token_counter::TokenCounter::count_mcp_context_tokens(&content);
 
         Self {
             id,

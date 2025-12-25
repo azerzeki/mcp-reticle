@@ -20,13 +20,19 @@ impl MockData {
         let mut logs = Vec::new();
         let mut log_id_counter = 0;
 
-        // Helper to create log entries with token counting
+        // Helper to create log entries with LLM-relevant token counting
         let mut add_log = |offset_ms: u64,
                            direction: &str,
                            content: String,
                            method: Option<&str>,
                            duration: Option<u64>| {
-            let token_count = TokenCounter::estimate_tokens(&content);
+            // Parse JSON to count LLM-relevant tokens (not raw JSON-RPC overhead)
+            let token_count = if let Ok(json) = serde_json::from_str::<serde_json::Value>(&content)
+            {
+                TokenCounter::count_mcp_context_tokens(&json)
+            } else {
+                TokenCounter::estimate_tokens(&content)
+            };
             logs.push(LogEvent {
                 id: format!("log-{log_id_counter}"),
                 session_id: session_id.clone(),
