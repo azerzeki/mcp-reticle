@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Play, Pause, Settings, Loader2, RotateCcw, Circle, Database, Download, Trash2 } from 'lucide-react'
+import { Play, Pause, Settings, Loader2, RotateCcw, Circle, Database, Download, Trash2, FileJson, FileSpreadsheet, FileText } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -19,6 +19,12 @@ import { invoke } from '@tauri-apps/api/core'
 import { listen } from '@tauri-apps/api/event'
 import { save } from '@tauri-apps/plugin-dialog'
 import { ThemeToggle } from '@/components/ThemeToggle'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 
 // Transport type definitions
 type TransportType = 'stdio' | 'remote'
@@ -232,7 +238,7 @@ export function ControlBar() {
     }
   }
 
-  const exportSession = async (sessionId: string, name: string) => {
+  const exportSession = async (sessionId: string, name: string, format: 'json' | 'csv' | 'har') => {
     try {
       // Sanitize filename: replace spaces with hyphens and remove special chars
       const sanitizedName = name
@@ -240,12 +246,15 @@ export function ControlBar() {
         .replace(/[^a-zA-Z0-9-_]/g, '')
         .toLowerCase()
 
+      const extension = format === 'har' ? 'har' : format
+      const filterName = format === 'json' ? 'JSON' : format === 'csv' ? 'CSV' : 'HAR'
+
       // Open save dialog
       const filePath = await save({
-        defaultPath: `${sanitizedName}.json`,
+        defaultPath: `${sanitizedName}.${extension}`,
         filters: [{
-          name: 'JSON',
-          extensions: ['json']
+          name: filterName,
+          extensions: [extension]
         }]
       })
 
@@ -253,9 +262,15 @@ export function ControlBar() {
         return // User cancelled
       }
 
-      // Export to selected path
-      await invoke('export_session', { sessionId, exportPath: filePath })
-      toast.success(`Session exported`, { description: `Saved to: ${filePath}` })
+      // Export to selected path using appropriate command
+      const command = format === 'json'
+        ? 'export_session'
+        : format === 'csv'
+          ? 'export_session_csv'
+          : 'export_session_har'
+
+      await invoke(command, { sessionId, exportPath: filePath })
+      toast.success(`Session exported as ${filterName}`, { description: `Saved to: ${filePath}` })
     } catch (error) {
       toast.error('Failed to export session', {
         description: error instanceof Error ? error.message : 'Unknown error',
@@ -495,14 +510,31 @@ export function ControlBar() {
                             </div>
                           </div>
                           <div className="flex gap-1">
-                            <Button
-                              onClick={() => exportSession(session.id, session.name)}
-                              size="sm"
-                              variant="ghost"
-                              className="h-7 w-7 p-0"
-                            >
-                              <Download className="h-3.5 w-3.5" />
-                            </Button>
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  className="h-7 w-7 p-0"
+                                >
+                                  <Download className="h-3.5 w-3.5" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end">
+                                <DropdownMenuItem onClick={() => exportSession(session.id, session.name, 'json')}>
+                                  <FileJson className="h-4 w-4 mr-2" />
+                                  Export as JSON
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => exportSession(session.id, session.name, 'csv')}>
+                                  <FileSpreadsheet className="h-4 w-4 mr-2" />
+                                  Export as CSV
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => exportSession(session.id, session.name, 'har')}>
+                                  <FileText className="h-4 w-4 mr-2" />
+                                  Export as HAR
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
                             <Button
                               onClick={() => setSessionToDelete(session)}
                               size="sm"

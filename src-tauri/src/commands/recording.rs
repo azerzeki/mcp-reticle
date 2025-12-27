@@ -158,6 +158,291 @@ pub async fn export_session(
     Ok(())
 }
 
+/// Export a session to CSV file
+#[tauri::command]
+pub async fn export_session_csv(
+    state: State<'_, AppState>,
+    session_id: String,
+    export_path: String,
+) -> Result<(), String> {
+    let session = state
+        .storage
+        .load_session(&session_id)
+        .await
+        .map_err(|e| format!("Failed to load session: {e}"))?;
+
+    let csv = session_to_csv(&session)?;
+
+    std::fs::write(&export_path, csv).map_err(|e| format!("Failed to write CSV file: {e}"))?;
+
+    tracing::info!("Exported session {} to CSV: {}", session_id, export_path);
+    Ok(())
+}
+
+/// Export a session to HAR (HTTP Archive) file
+#[tauri::command]
+pub async fn export_session_har(
+    state: State<'_, AppState>,
+    session_id: String,
+    export_path: String,
+) -> Result<(), String> {
+    let session = state
+        .storage
+        .load_session(&session_id)
+        .await
+        .map_err(|e| format!("Failed to load session: {e}"))?;
+
+    let har = session_to_har(&session)?;
+
+    std::fs::write(&export_path, har).map_err(|e| format!("Failed to write HAR file: {e}"))?;
+
+    tracing::info!("Exported session {} to HAR: {}", session_id, export_path);
+    Ok(())
+}
+
+/// Convert a session to CSV format
+fn session_to_csv(
+    session: &reticle_core::session_recorder::RecordedSession,
+) -> Result<String, String> {
+    use std::fmt::Write;
+
+    let mut csv = String::new();
+
+    // CSV header
+    writeln!(
+        csv,
+        "id,timestamp,relative_time_ms,direction,method,jsonrpc_id,size_bytes,content"
+    )
+    .map_err(|e| format!("Failed to write CSV header: {e}"))?;
+
+    // CSV rows
+    for msg in &session.messages {
+        let direction = match msg.direction {
+            reticle_core::session_recorder::MessageDirection::ToServer => "request",
+            reticle_core::session_recorder::MessageDirection::ToClient => "response",
+        };
+
+        let method = msg.metadata.method.as_deref().unwrap_or("");
+        let jsonrpc_id = msg
+            .metadata
+            .jsonrpc_id
+            .as_ref()
+            .map(|v| v.to_string())
+            .unwrap_or_default();
+
+        // Escape content for CSV (double quotes, escape existing quotes)
+        let content = msg.content.to_string();
+        let escaped_content = content.replace('"', "\"\"");
+
+        writeln!(
+            csv,
+            "{},{},{},{},{},{},{},\"{}\"",
+            msg.id,
+            msg.timestamp_micros,
+            msg.relative_time_ms,
+            direction,
+            method,
+            jsonrpc_id,
+            msg.metadata.size_bytes,
+            escaped_content
+        )
+        .map_err(|e| format!("Failed to write CSV row: {e}"))?;
+    }
+
+    Ok(csv)
+}
+
+/// Convert a session to HAR (HTTP Archive) format
+/// HAR is a standard format for HTTP traffic, we adapt it for MCP/JSON-RPC
+fn session_to_har(
+    session: &reticle_core::session_recorder::RecordedSession,
+) -> Result<String, String> {
+    use serde_json::json;
+
+    // Build HAR entries from messages
+    // We pair requests with responses based on JSON-RPC ID
+    let mut entries: Vec<serde_json::Value> = Vec::new();
+
+    // Create a map of responses by JSON-RPC ID
+    let mut response_map: std::collections::HashMap<
+        String,
+        &reticle_core::session_recorder::RecordedMessage,
+    > = std::collections::HashMap::new();
+
+    for msg in &session.messages {
+        if matches!(
+            msg.direction,
+            reticle_core::session_recorder::MessageDirection::ToClient
+        ) {
+            if let Some(id) = &msg.metadata.jsonrpc_id {
+                response_map.insert(id.to_string(), msg);
+            }
+        }
+    }
+
+    // Process requests and pair with responses
+    for msg in &session.messages {
+        if !matches!(
+            msg.direction,
+            reticle_core::session_recorder::MessageDirection::ToServer
+        ) {
+            continue;
+        }
+
+        let method = msg.metadata.method.as_deref().unwrap_or("unknown");
+
+        // Find matching response
+        let response = msg
+            .metadata
+            .jsonrpc_id
+            .as_ref()
+            .and_then(|id| response_map.get(&id.to_string()));
+
+        // Calculate timing
+        let wait_time = response
+            .map(|r| (r.timestamp_micros - msg.timestamp_micros) / 1000) // Convert to ms
+            .unwrap_or(0);
+
+        // Convert timestamp to ISO 8601
+        let started_datetime = timestamp_to_iso8601(msg.timestamp_micros);
+
+        // Build HAR entry
+        let entry = json!({
+            "startedDateTime": started_datetime,
+            "time": wait_time,
+            "request": {
+                "method": "POST",
+                "url": format!("mcp://localhost/{}", method),
+                "httpVersion": "MCP/1.0",
+                "cookies": [],
+                "headers": [
+                    {"name": "Content-Type", "value": "application/json"}
+                ],
+                "queryString": [],
+                "postData": {
+                    "mimeType": "application/json",
+                    "text": msg.content.to_string()
+                },
+                "headersSize": -1,
+                "bodySize": msg.metadata.size_bytes
+            },
+            "response": {
+                "status": if response.is_some() { 200 } else { 0 },
+                "statusText": if response.is_some() { "OK" } else { "No Response" },
+                "httpVersion": "MCP/1.0",
+                "cookies": [],
+                "headers": [
+                    {"name": "Content-Type", "value": "application/json"}
+                ],
+                "content": {
+                    "size": response.map(|r| r.metadata.size_bytes).unwrap_or(0),
+                    "mimeType": "application/json",
+                    "text": response.map(|r| r.content.to_string()).unwrap_or_default()
+                },
+                "redirectURL": "",
+                "headersSize": -1,
+                "bodySize": response.map(|r| r.metadata.size_bytes as i64).unwrap_or(-1)
+            },
+            "cache": {},
+            "timings": {
+                "send": 0,
+                "wait": wait_time,
+                "receive": 0
+            },
+            "comment": format!("MCP {} call", method)
+        });
+
+        entries.push(entry);
+    }
+
+    // Build complete HAR structure
+    let har = json!({
+        "log": {
+            "version": "1.2",
+            "creator": {
+                "name": "Reticle",
+                "version": "0.1.0",
+                "comment": "MCP Traffic Inspector"
+            },
+            "browser": {
+                "name": "MCP Client",
+                "version": "1.0"
+            },
+            "pages": [
+                {
+                    "startedDateTime": timestamp_to_iso8601(session.started_at * 1000),
+                    "id": &session.id,
+                    "title": &session.name,
+                    "pageTimings": {
+                        "onContentLoad": session.metadata.duration_ms.unwrap_or(0),
+                        "onLoad": session.metadata.duration_ms.unwrap_or(0)
+                    }
+                }
+            ],
+            "entries": entries,
+            "comment": format!(
+                "MCP session with {} messages via {} transport",
+                session.metadata.message_count,
+                session.metadata.transport
+            )
+        }
+    });
+
+    serde_json::to_string_pretty(&har).map_err(|e| format!("Failed to serialize HAR: {e}"))
+}
+
+/// Convert microseconds timestamp to ISO 8601 format
+fn timestamp_to_iso8601(micros: u64) -> String {
+    let secs = micros / 1_000_000;
+    let millis = (micros % 1_000_000) / 1000;
+
+    // Calculate date/time components from Unix timestamp
+    let days_since_epoch = secs / 86400;
+    let time_of_day = secs % 86400;
+    let hours = time_of_day / 3600;
+    let minutes = (time_of_day % 3600) / 60;
+    let seconds = time_of_day % 60;
+
+    // Simplified date calculation (not accounting for leap years perfectly)
+    let mut year = 1970i64;
+    let mut remaining_days = days_since_epoch as i64;
+
+    while remaining_days >= 365 {
+        let days_in_year = if is_leap_year(year) { 366 } else { 365 };
+        if remaining_days >= days_in_year {
+            remaining_days -= days_in_year;
+            year += 1;
+        } else {
+            break;
+        }
+    }
+
+    let days_in_months = if is_leap_year(year) {
+        [31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
+    } else {
+        [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
+    };
+
+    let mut month = 1;
+    for days in days_in_months {
+        if remaining_days < days {
+            break;
+        }
+        remaining_days -= days;
+        month += 1;
+    }
+    let day = remaining_days + 1;
+
+    format!(
+        "{:04}-{:02}-{:02}T{:02}:{:02}:{:02}.{:03}Z",
+        year, month, day, hours, minutes, seconds, millis
+    )
+}
+
+fn is_leap_year(year: i64) -> bool {
+    (year % 4 == 0 && year % 100 != 0) || (year % 400 == 0)
+}
+
 /// Recording status for UI
 #[derive(Debug, serde::Serialize)]
 pub struct RecordingStatus {

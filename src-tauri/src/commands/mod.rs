@@ -20,8 +20,9 @@ pub mod tokens;
 pub use interaction::{can_interact, get_mcp_methods, send_raw_message, send_request};
 pub use proxy::{start_proxy, start_proxy_v2, start_remote_proxy, stop_proxy};
 pub use recording::{
-    delete_recorded_session, export_session, get_recording_status, list_recorded_sessions,
-    load_recorded_session, start_recording, stop_recording,
+    delete_recorded_session, export_session, export_session_csv, export_session_har,
+    get_recording_status, list_recorded_sessions, load_recorded_session, start_recording,
+    stop_recording,
 };
 pub use sessions::{
     add_session_tags, get_all_server_names, get_all_tags, get_session_metadata,
