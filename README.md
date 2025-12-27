@@ -332,16 +332,14 @@ just build    # Desktop app (macOS/Linux/Windows)
 - [x] Confirmation dialogs for destructive actions (Clear Logs, Delete Session)
 - [x] Transport type toggle surfaced in control bar
 - [x] Improved empty state messaging with getting-started hints
-
-### In Progress
-- [ ] Log export (CSV/HAR formats)
+- [x] Log export (JSON/CSV/HAR formats)
+- [x] Distribution packages (npm, PyPI, Homebrew)
 
 ### Planned
 - [ ] Security firewall (block/allow specific methods)
 - [ ] Traffic replay and request modification
 - [ ] Session playback (replay recorded sessions)
 - [ ] Multi-agent topology view
-- [ ] npm/Homebrew distribution
 - [ ] First-time user onboarding tour
 
 ---

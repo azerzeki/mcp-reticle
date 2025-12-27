@@ -27,11 +27,11 @@ mod storage;
 use commands::{
     add_session_tags, analyze_mcp_server, can_interact, clear_all_token_stats,
     clear_session_token_stats, delete_recorded_session, estimate_tokens, export_session,
-    get_all_server_names, get_all_tags, get_global_token_stats, get_mcp_methods,
-    get_recording_status, get_session_metadata, get_session_token_stats, list_recorded_sessions,
-    list_sessions_filtered, load_recorded_session, remove_session_tags, send_raw_message,
-    send_request, start_proxy, start_proxy_v2, start_recording, start_remote_proxy, stop_proxy,
-    stop_recording,
+    export_session_csv, export_session_har, get_all_server_names, get_all_tags,
+    get_global_token_stats, get_mcp_methods, get_recording_status, get_session_metadata,
+    get_session_token_stats, list_recorded_sessions, list_sessions_filtered, load_recorded_session,
+    remove_session_tags, send_raw_message, send_request, start_proxy, start_proxy_v2,
+    start_recording, start_remote_proxy, stop_proxy, stop_recording,
 };
 use state::AppState;
 
@@ -63,6 +63,8 @@ fn main() {
             load_recorded_session,
             delete_recorded_session,
             export_session,
+            export_session_csv,
+            export_session_har,
             // Interaction commands
             send_request,
             send_raw_message,
