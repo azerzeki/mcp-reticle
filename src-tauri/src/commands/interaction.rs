@@ -324,3 +324,143 @@ pub struct McpMethodInfo {
     /// Example parameters (if any)
     pub example_params: Option<serde_json::Value>,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_send_request_params_serialization() {
+        let params = SendRequestParams {
+            method: "tools/list".to_string(),
+            params: Some(serde_json::json!({"key": "value"})),
+            id: Some(serde_json::json!("req-123")),
+        };
+
+        let json = serde_json::to_string(&params).unwrap();
+        assert!(json.contains("\"method\":\"tools/list\""));
+        assert!(json.contains("\"key\":\"value\""));
+        assert!(json.contains("\"id\":\"req-123\""));
+    }
+
+    #[test]
+    fn test_send_request_params_deserialization() {
+        let json = r#"{"method":"ping","params":null,"id":1}"#;
+        let params: SendRequestParams = serde_json::from_str(json).unwrap();
+
+        assert_eq!(params.method, "ping");
+        assert!(params.params.is_none());
+        assert_eq!(params.id, Some(serde_json::json!(1)));
+    }
+
+    #[test]
+    fn test_send_request_params_minimal() {
+        let json = r#"{"method":"initialize"}"#;
+        let params: SendRequestParams = serde_json::from_str(json).unwrap();
+
+        assert_eq!(params.method, "initialize");
+        assert!(params.params.is_none());
+        assert!(params.id.is_none());
+    }
+
+    #[test]
+    fn test_send_request_result_serialization() {
+        let result = SendRequestResult {
+            request_id: serde_json::json!("req-1"),
+            request: serde_json::json!({
+                "jsonrpc": "2.0",
+                "id": "req-1",
+                "method": "ping"
+            }),
+        };
+
+        let json = serde_json::to_string(&result).unwrap();
+        assert!(json.contains("\"request_id\":\"req-1\""));
+        assert!(json.contains("\"jsonrpc\":\"2.0\""));
+    }
+
+    #[test]
+    fn test_generate_request_id_unique() {
+        let id1 = generate_request_id();
+        let id2 = generate_request_id();
+        let id3 = generate_request_id();
+
+        // All IDs should be unique
+        assert_ne!(id1, id2);
+        assert_ne!(id2, id3);
+        assert_ne!(id1, id3);
+    }
+
+    #[test]
+    fn test_generate_request_id_format() {
+        let id = generate_request_id();
+
+        // ID should be a string starting with "req-"
+        let id_str = id.as_str().unwrap();
+        assert!(id_str.starts_with("req-"));
+    }
+
+    #[test]
+    fn test_get_mcp_methods_returns_methods() {
+        let methods = get_mcp_methods();
+
+        // Should return at least the core MCP methods
+        assert!(!methods.is_empty());
+        assert!(methods.len() >= 5);
+    }
+
+    #[test]
+    fn test_get_mcp_methods_contains_initialize() {
+        let methods = get_mcp_methods();
+
+        let initialize = methods.iter().find(|m| m.method == "initialize");
+        assert!(initialize.is_some());
+
+        let init = initialize.unwrap();
+        assert!(!init.description.is_empty());
+        assert!(init.example_params.is_some());
+    }
+
+    #[test]
+    fn test_get_mcp_methods_contains_tools_list() {
+        let methods = get_mcp_methods();
+
+        let tools_list = methods.iter().find(|m| m.method == "tools/list");
+        assert!(tools_list.is_some());
+    }
+
+    #[test]
+    fn test_get_mcp_methods_contains_ping() {
+        let methods = get_mcp_methods();
+
+        let ping = methods.iter().find(|m| m.method == "ping");
+        assert!(ping.is_some());
+        assert!(ping.unwrap().example_params.is_none());
+    }
+
+    #[test]
+    fn test_mcp_method_info_serialization() {
+        let info = McpMethodInfo {
+            method: "tools/call".to_string(),
+            description: "Call a tool".to_string(),
+            example_params: Some(serde_json::json!({"name": "test_tool"})),
+        };
+
+        let json = serde_json::to_string(&info).unwrap();
+        assert!(json.contains("\"method\":\"tools/call\""));
+        assert!(json.contains("\"description\":\"Call a tool\""));
+    }
+
+    #[test]
+    fn test_mcp_method_info_clone() {
+        let info = McpMethodInfo {
+            method: "ping".to_string(),
+            description: "Ping the server".to_string(),
+            example_params: None,
+        };
+
+        let cloned = info.clone();
+        assert_eq!(cloned.method, info.method);
+        assert_eq!(cloned.description, info.description);
+    }
+}

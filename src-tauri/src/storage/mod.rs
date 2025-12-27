@@ -343,3 +343,297 @@ mod bincode {
         serde_json::from_slice(bytes).map_err(|e| e.to_string())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::core::session_recorder::{RecordedSession, SessionMetadata};
+    use tempfile::TempDir;
+
+    fn create_test_session(id: &str, name: &str) -> RecordedSession {
+        RecordedSession {
+            id: id.to_string(),
+            name: name.to_string(),
+            started_at: 1700000000000000,
+            ended_at: Some(1700000001000000),
+            messages: vec![],
+            metadata: SessionMetadata {
+                transport: "stdio".to_string(),
+                message_count: 5,
+                duration_ms: Some(1000),
+                client_info: None,
+                server_info: None,
+                server_id: None,
+                tags: vec![],
+            },
+        }
+    }
+
+    #[test]
+    fn test_session_info_serialization() {
+        let info = SessionInfo {
+            id: "session-1".to_string(),
+            name: "Test Session".to_string(),
+            started_at: 1700000000000000,
+            ended_at: Some(1700000001000000),
+            message_count: 10,
+            duration_ms: Some(1000),
+            transport: "stdio".to_string(),
+            server_name: Some("test-server".to_string()),
+            tags: vec!["tag1".to_string(), "tag2".to_string()],
+        };
+
+        let json = serde_json::to_string(&info).unwrap();
+        assert!(json.contains("\"id\":\"session-1\""));
+        assert!(json.contains("\"server_name\":\"test-server\""));
+        assert!(json.contains("\"tags\":[\"tag1\",\"tag2\"]"));
+
+        let deserialized: SessionInfo = serde_json::from_str(&json).unwrap();
+        assert_eq!(deserialized.id, "session-1");
+        assert_eq!(deserialized.tags.len(), 2);
+    }
+
+    #[test]
+    fn test_session_info_defaults() {
+        let json = r#"{
+            "id": "session-2",
+            "name": "Test",
+            "started_at": 1700000000000000,
+            "ended_at": null,
+            "message_count": 0,
+            "duration_ms": null,
+            "transport": "sse"
+        }"#;
+
+        let info: SessionInfo = serde_json::from_str(json).unwrap();
+        assert!(info.server_name.is_none());
+        assert!(info.tags.is_empty());
+    }
+
+    #[test]
+    fn test_storage_stats_serialization() {
+        let stats = StorageStats {
+            session_count: 42,
+            size_bytes: 1024 * 1024,
+        };
+
+        let json = serde_json::to_string(&stats).unwrap();
+        assert!(json.contains("\"session_count\":42"));
+        assert!(json.contains("\"size_bytes\":1048576"));
+    }
+
+    #[test]
+    fn test_session_filter_default() {
+        let filter = SessionFilter::default();
+
+        assert!(filter.server_name.is_none());
+        assert!(filter.tags.is_empty());
+        assert!(filter.transport.is_none());
+    }
+
+    #[test]
+    fn test_session_filter_serialization() {
+        let filter = SessionFilter {
+            server_name: Some("filesystem".to_string()),
+            tags: vec!["production".to_string()],
+            transport: Some("stdio".to_string()),
+        };
+
+        let json = serde_json::to_string(&filter).unwrap();
+        let deserialized: SessionFilter = serde_json::from_str(&json).unwrap();
+
+        assert_eq!(deserialized.server_name, Some("filesystem".to_string()));
+        assert_eq!(deserialized.tags, vec!["production".to_string()]);
+    }
+
+    #[tokio::test]
+    async fn test_session_storage_new() {
+        let temp_dir = TempDir::new().unwrap();
+        let db_path = temp_dir.path().join("test.db");
+
+        let storage = SessionStorage::new(db_path).unwrap();
+        let stats = storage.get_stats().unwrap();
+
+        assert_eq!(stats.session_count, 0);
+    }
+
+    #[tokio::test]
+    async fn test_session_storage_save_and_load() {
+        let temp_dir = TempDir::new().unwrap();
+        let db_path = temp_dir.path().join("test.db");
+        let storage = SessionStorage::new(db_path).unwrap();
+
+        let session = create_test_session("session-1", "Test Session");
+        storage.save_session(&session).await.unwrap();
+
+        let loaded = storage.load_session("session-1").await.unwrap();
+        assert_eq!(loaded.id, "session-1");
+        assert_eq!(loaded.name, "Test Session");
+        assert_eq!(loaded.metadata.message_count, 5);
+    }
+
+    #[tokio::test]
+    async fn test_session_storage_list_sessions() {
+        let temp_dir = TempDir::new().unwrap();
+        let db_path = temp_dir.path().join("test.db");
+        let storage = SessionStorage::new(db_path).unwrap();
+
+        // Save multiple sessions
+        let session1 = create_test_session("session-1", "First");
+        let session2 = create_test_session("session-2", "Second");
+
+        storage.save_session(&session1).await.unwrap();
+        storage.save_session(&session2).await.unwrap();
+
+        let sessions = storage.list_sessions().await.unwrap();
+        assert_eq!(sessions.len(), 2);
+    }
+
+    #[tokio::test]
+    async fn test_session_storage_delete_session() {
+        let temp_dir = TempDir::new().unwrap();
+        let db_path = temp_dir.path().join("test.db");
+        let storage = SessionStorage::new(db_path).unwrap();
+
+        let session = create_test_session("session-to-delete", "Delete Me");
+        storage.save_session(&session).await.unwrap();
+
+        // Verify it exists
+        let sessions = storage.list_sessions().await.unwrap();
+        assert_eq!(sessions.len(), 1);
+
+        // Delete it
+        storage.delete_session("session-to-delete").await.unwrap();
+
+        // Verify it's gone
+        let sessions = storage.list_sessions().await.unwrap();
+        assert_eq!(sessions.len(), 0);
+    }
+
+    #[tokio::test]
+    async fn test_session_storage_load_nonexistent() {
+        let temp_dir = TempDir::new().unwrap();
+        let db_path = temp_dir.path().join("test.db");
+        let storage = SessionStorage::new(db_path).unwrap();
+
+        let result = storage.load_session("nonexistent").await;
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn test_session_storage_tags() {
+        let temp_dir = TempDir::new().unwrap();
+        let db_path = temp_dir.path().join("test.db");
+        let storage = SessionStorage::new(db_path).unwrap();
+
+        let session = create_test_session("session-tags", "Tag Test");
+        storage.save_session(&session).await.unwrap();
+
+        // Add tags
+        storage.add_session_tags("session-tags", vec!["prod".to_string(), "debug".to_string()]).await.unwrap();
+
+        let loaded = storage.load_session("session-tags").await.unwrap();
+        assert_eq!(loaded.metadata.tags.len(), 2);
+        assert!(loaded.metadata.tags.contains(&"prod".to_string()));
+
+        // Remove a tag
+        storage.remove_session_tags("session-tags", vec!["debug".to_string()]).await.unwrap();
+
+        let loaded = storage.load_session("session-tags").await.unwrap();
+        assert_eq!(loaded.metadata.tags.len(), 1);
+        assert!(!loaded.metadata.tags.contains(&"debug".to_string()));
+    }
+
+    #[tokio::test]
+    async fn test_session_storage_get_all_tags() {
+        let temp_dir = TempDir::new().unwrap();
+        let db_path = temp_dir.path().join("test.db");
+        let storage = SessionStorage::new(db_path).unwrap();
+
+        let mut session1 = create_test_session("s1", "Session 1");
+        session1.metadata.tags = vec!["alpha".to_string(), "beta".to_string()];
+
+        let mut session2 = create_test_session("s2", "Session 2");
+        session2.metadata.tags = vec!["beta".to_string(), "gamma".to_string()];
+
+        storage.save_session(&session1).await.unwrap();
+        storage.save_session(&session2).await.unwrap();
+
+        let all_tags = storage.get_all_tags().await.unwrap();
+        assert_eq!(all_tags.len(), 3); // alpha, beta, gamma (deduplicated)
+        assert!(all_tags.contains(&"alpha".to_string()));
+        assert!(all_tags.contains(&"beta".to_string()));
+        assert!(all_tags.contains(&"gamma".to_string()));
+    }
+
+    #[tokio::test]
+    async fn test_session_storage_filter_by_transport() {
+        let temp_dir = TempDir::new().unwrap();
+        let db_path = temp_dir.path().join("test.db");
+        let storage = SessionStorage::new(db_path).unwrap();
+
+        let mut session1 = create_test_session("s1", "STDIO Session");
+        session1.metadata.transport = "stdio".to_string();
+
+        let mut session2 = create_test_session("s2", "SSE Session");
+        session2.metadata.transport = "sse".to_string();
+
+        storage.save_session(&session1).await.unwrap();
+        storage.save_session(&session2).await.unwrap();
+
+        let filter = SessionFilter {
+            transport: Some("stdio".to_string()),
+            ..Default::default()
+        };
+
+        let filtered = storage.list_sessions_filtered(&filter).await.unwrap();
+        assert_eq!(filtered.len(), 1);
+        assert_eq!(filtered[0].transport, "stdio");
+    }
+
+    #[tokio::test]
+    async fn test_session_storage_filter_by_tags() {
+        let temp_dir = TempDir::new().unwrap();
+        let db_path = temp_dir.path().join("test.db");
+        let storage = SessionStorage::new(db_path).unwrap();
+
+        let mut session1 = create_test_session("s1", "Tagged");
+        session1.metadata.tags = vec!["important".to_string(), "reviewed".to_string()];
+
+        let mut session2 = create_test_session("s2", "Untagged");
+        session2.metadata.tags = vec![];
+
+        storage.save_session(&session1).await.unwrap();
+        storage.save_session(&session2).await.unwrap();
+
+        let filter = SessionFilter {
+            tags: vec!["important".to_string()],
+            ..Default::default()
+        };
+
+        let filtered = storage.list_sessions_filtered(&filter).await.unwrap();
+        assert_eq!(filtered.len(), 1);
+        assert_eq!(filtered[0].id, "s1");
+    }
+
+    #[test]
+    fn test_bincode_serialize_deserialize() {
+        let info = SessionInfo {
+            id: "test".to_string(),
+            name: "Test".to_string(),
+            started_at: 12345,
+            ended_at: None,
+            message_count: 10,
+            duration_ms: Some(100),
+            transport: "stdio".to_string(),
+            server_name: None,
+            tags: vec!["a".to_string()],
+        };
+
+        let bytes = bincode::serialize(&info).unwrap();
+        let deserialized: SessionInfo = bincode::deserialize(&bytes).unwrap();
+
+        assert_eq!(deserialized.id, "test");
+        assert_eq!(deserialized.tags, vec!["a".to_string()]);
+    }
+}

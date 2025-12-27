@@ -64,3 +64,88 @@ pub async fn analyze_mcp_server(
         .await
         .map_err(|e| e.to_string())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_estimate_tokens_empty_string() {
+        let tokens = estimate_tokens(String::new());
+        assert_eq!(tokens, 0);
+    }
+
+    #[test]
+    fn test_estimate_tokens_simple_text() {
+        let tokens = estimate_tokens("Hello, world!".to_string());
+        // Should return some tokens (actual count depends on implementation)
+        assert!(tokens > 0);
+    }
+
+    #[test]
+    fn test_estimate_tokens_longer_text() {
+        let short = estimate_tokens("Hello".to_string());
+        let long = estimate_tokens(
+            "This is a much longer piece of text that should have more tokens".to_string(),
+        );
+
+        // Longer text should have more tokens
+        assert!(long > short);
+    }
+
+    #[test]
+    fn test_estimate_tokens_json() {
+        let json = r#"{"jsonrpc":"2.0","method":"tools/call","params":{"name":"test"}}"#;
+        let tokens = estimate_tokens(json.to_string());
+
+        // JSON should tokenize reasonably
+        assert!(tokens > 5);
+    }
+
+    #[test]
+    fn test_estimate_tokens_whitespace() {
+        let whitespace = estimate_tokens("   \n\t\n   ".to_string());
+        let text = estimate_tokens("Hello world".to_string());
+
+        // Whitespace-only should have fewer tokens than text
+        assert!(whitespace <= text);
+    }
+
+    #[test]
+    fn test_estimate_tokens_unicode() {
+        let tokens = estimate_tokens("こんにちは世界".to_string());
+        // Unicode should be handled (may have different token count)
+        assert!(tokens >= 0);
+    }
+
+    #[test]
+    fn test_estimate_tokens_code() {
+        let code = r#"
+            fn main() {
+                println!("Hello, world!");
+            }
+        "#;
+        let tokens = estimate_tokens(code.to_string());
+
+        // Code should have a reasonable token count
+        assert!(tokens > 5);
+    }
+
+    #[test]
+    fn test_estimate_tokens_large_json() {
+        let large_json = serde_json::json!({
+            "tools": [
+                {"name": "tool1", "description": "A test tool"},
+                {"name": "tool2", "description": "Another test tool"},
+                {"name": "tool3", "description": "Yet another test tool"}
+            ],
+            "resources": [
+                {"uri": "file:///test.txt", "name": "Test Resource"}
+            ]
+        });
+
+        let tokens = estimate_tokens(large_json.to_string());
+        // Large JSON should have significant tokens
+        assert!(tokens > 20);
+    }
+}

@@ -200,3 +200,113 @@ fn chrono_format(session_id: &str) -> String {
     }
     session_id.to_string()
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_recording_status_not_recording() {
+        let status = RecordingStatus {
+            is_recording: false,
+            session_id: None,
+            message_count: 0,
+            duration_seconds: 0,
+        };
+
+        let json = serde_json::to_string(&status).unwrap();
+        assert!(json.contains("\"is_recording\":false"));
+        assert!(json.contains("\"session_id\":null"));
+        assert!(json.contains("\"message_count\":0"));
+    }
+
+    #[test]
+    fn test_recording_status_active() {
+        let status = RecordingStatus {
+            is_recording: true,
+            session_id: Some("session-123".to_string()),
+            message_count: 42,
+            duration_seconds: 300,
+        };
+
+        let json = serde_json::to_string(&status).unwrap();
+        assert!(json.contains("\"is_recording\":true"));
+        assert!(json.contains("\"session_id\":\"session-123\""));
+        assert!(json.contains("\"message_count\":42"));
+        assert!(json.contains("\"duration_seconds\":300"));
+    }
+
+    #[test]
+    fn test_generate_session_id_format() {
+        let session_id = generate_session_id();
+
+        // Should start with "session-"
+        assert!(session_id.starts_with("session-"));
+
+        // Rest should be a valid number (timestamp)
+        let timestamp_str = session_id.strip_prefix("session-").unwrap();
+        let timestamp: u64 = timestamp_str.parse().unwrap();
+
+        // Should be a reasonable Unix timestamp (after 2020)
+        assert!(timestamp > 1577836800); // Jan 1, 2020
+    }
+
+    #[test]
+    fn test_generate_session_id_unique() {
+        let id1 = generate_session_id();
+        // Sleep briefly to ensure timestamp differs
+        std::thread::sleep(std::time::Duration::from_millis(1100));
+        let id2 = generate_session_id();
+
+        // IDs should be different (assuming at least 1 second apart)
+        assert_ne!(id1, id2);
+    }
+
+    #[test]
+    fn test_chrono_format_valid_session_id() {
+        // Test with a known timestamp: 1700000000 = 2023-11-14 22:13:20 UTC
+        let formatted = chrono_format("session-1700000000");
+
+        // Should return a formatted date string
+        assert!(formatted.contains("2023")); // Year
+        assert!(formatted.contains(":")); // Time separator
+    }
+
+    #[test]
+    fn test_chrono_format_invalid_session_id() {
+        let result = chrono_format("not-a-session-id");
+
+        // Should return the original string
+        assert_eq!(result, "not-a-session-id");
+    }
+
+    #[test]
+    fn test_chrono_format_invalid_number() {
+        let result = chrono_format("session-notanumber");
+
+        // Should return the original string
+        assert_eq!(result, "session-notanumber");
+    }
+
+    #[test]
+    fn test_chrono_format_zero_timestamp() {
+        let formatted = chrono_format("session-0");
+
+        // Should format to Unix epoch
+        assert!(formatted.contains("1970"));
+    }
+
+    #[test]
+    fn test_recording_status_debug() {
+        let status = RecordingStatus {
+            is_recording: true,
+            session_id: Some("test".to_string()),
+            message_count: 10,
+            duration_seconds: 60,
+        };
+
+        // Debug trait should work
+        let debug_str = format!("{:?}", status);
+        assert!(debug_str.contains("RecordingStatus"));
+    }
+}
