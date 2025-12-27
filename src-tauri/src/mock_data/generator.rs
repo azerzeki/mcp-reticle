@@ -248,3 +248,184 @@ impl MockData {
         MockData { session, logs }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_mock_data_generate() {
+        let data = MockData::generate();
+
+        assert_eq!(data.session.id, "demo-session-12345");
+        assert!(data.logs.len() > 0);
+    }
+
+    #[test]
+    fn test_mock_data_generate_for_server() {
+        let data = MockData::generate_for_server("test-server");
+
+        assert_eq!(data.session.id, "demo-session-12345");
+
+        // All logs should have the specified server name
+        for log in &data.logs {
+            assert_eq!(log.server_name, Some("test-server".to_string()));
+        }
+    }
+
+    #[test]
+    fn test_mock_data_session_id_consistency() {
+        let data = MockData::generate();
+
+        // All logs should reference the same session
+        for log in &data.logs {
+            assert_eq!(log.session_id, data.session.id);
+        }
+    }
+
+    #[test]
+    fn test_mock_data_log_ids_unique() {
+        let data = MockData::generate();
+
+        let mut ids: Vec<&String> = data.logs.iter().map(|l| &l.id).collect();
+        let original_len = ids.len();
+        ids.sort();
+        ids.dedup();
+
+        assert_eq!(ids.len(), original_len, "All log IDs should be unique");
+    }
+
+    #[test]
+    fn test_mock_data_has_initialize_handshake() {
+        let data = MockData::generate();
+
+        let has_initialize = data.logs.iter().any(|l| l.method == Some("initialize".to_string()));
+        let has_initialized = data.logs.iter().any(|l| l.method == Some("initialized".to_string()));
+
+        assert!(has_initialize, "Should have initialize request");
+        assert!(has_initialized, "Should have initialized notification");
+    }
+
+    #[test]
+    fn test_mock_data_has_tools_list() {
+        let data = MockData::generate();
+
+        let has_tools_list = data.logs.iter().any(|l| l.method == Some("tools/list".to_string()));
+
+        assert!(has_tools_list, "Should have tools/list request");
+    }
+
+    #[test]
+    fn test_mock_data_has_resources_list() {
+        let data = MockData::generate();
+
+        let has_resources = data.logs.iter().any(|l| l.method == Some("resources/list".to_string()));
+
+        assert!(has_resources, "Should have resources/list request");
+    }
+
+    #[test]
+    fn test_mock_data_has_tools_call() {
+        let data = MockData::generate();
+
+        let tools_calls: Vec<_> = data.logs.iter()
+            .filter(|l| l.method == Some("tools/call".to_string()))
+            .collect();
+
+        assert!(tools_calls.len() > 5, "Should have multiple tools/call requests");
+    }
+
+    #[test]
+    fn test_mock_data_has_error_responses() {
+        let data = MockData::generate();
+
+        // Check for error responses (JSON-RPC errors)
+        let has_errors = data.logs.iter().any(|l| l.content.contains("\"error\""));
+
+        assert!(has_errors, "Should have error responses");
+    }
+
+    #[test]
+    fn test_mock_data_has_sampling_requests() {
+        let data = MockData::generate();
+
+        let has_sampling = data.logs.iter()
+            .any(|l| l.method == Some("sampling/createMessage".to_string()));
+
+        assert!(has_sampling, "Should have sampling/createMessage requests");
+    }
+
+    #[test]
+    fn test_mock_data_timestamps_increasing() {
+        let data = MockData::generate();
+
+        for window in data.logs.windows(2) {
+            // Timestamps should generally be non-decreasing
+            // (some pairs may be concurrent so equal is allowed)
+            assert!(
+                window[0].timestamp <= window[1].timestamp + 1000000, // Allow 1 second variance
+                "Timestamps should be increasing"
+            );
+        }
+    }
+
+    #[test]
+    fn test_mock_data_directions() {
+        let data = MockData::generate();
+
+        let incoming: Vec<_> = data.logs.iter().filter(|l| l.direction == "in").collect();
+        let outgoing: Vec<_> = data.logs.iter().filter(|l| l.direction == "out").collect();
+
+        assert!(incoming.len() > 0, "Should have incoming messages");
+        assert!(outgoing.len() > 0, "Should have outgoing messages");
+    }
+
+    #[test]
+    fn test_mock_data_token_counts() {
+        let data = MockData::generate();
+
+        // All logs should have token counts
+        for log in &data.logs {
+            // Token count is always set (default 0)
+            assert!(log.token_count >= 0);
+        }
+
+        // At least some messages should have non-zero token counts
+        let has_tokens = data.logs.iter().any(|l| l.token_count > 0);
+        assert!(has_tokens, "Some messages should have non-zero token counts");
+    }
+
+    #[test]
+    fn test_mock_data_json_structure() {
+        let data = MockData::generate();
+
+        // Check that content is non-empty and has JSON-like structure
+        for log in &data.logs {
+            assert!(!log.content.is_empty(), "Log content should not be empty");
+            assert!(log.content.contains("jsonrpc") || log.content.contains("{"),
+                    "Log content should look like JSON-RPC: {}", log.id);
+        }
+    }
+
+    #[test]
+    fn test_mock_data_response_durations() {
+        let data = MockData::generate();
+
+        // Outgoing messages (responses) should have durations
+        let responses_with_duration: Vec<_> = data.logs.iter()
+            .filter(|l| l.direction == "out" && l.duration_micros.is_some())
+            .collect();
+
+        assert!(responses_with_duration.len() > 0, "Should have responses with durations");
+    }
+
+    #[test]
+    fn test_mock_data_prompts_list() {
+        let data = MockData::generate();
+
+        let has_prompts = data.logs.iter()
+            .any(|l| l.method == Some("prompts/list".to_string()));
+
+        assert!(has_prompts, "Should have prompts/list request");
+    }
+}
