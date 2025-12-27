@@ -389,3 +389,288 @@ mod uuid {
         ((now.as_nanos() % 1000000) as f64) / 1000000.0
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_message_direction_display() {
+        assert_eq!(MessageDirection::ToServer.to_string(), "to_server");
+        assert_eq!(MessageDirection::ToClient.to_string(), "to_client");
+    }
+
+    #[test]
+    fn test_message_direction_serialize() {
+        let to_server = serde_json::to_string(&MessageDirection::ToServer).unwrap();
+        let to_client = serde_json::to_string(&MessageDirection::ToClient).unwrap();
+
+        assert_eq!(to_server, "\"toserver\"");
+        assert_eq!(to_client, "\"toclient\"");
+    }
+
+    #[test]
+    fn test_message_direction_deserialize() {
+        let to_server: MessageDirection = serde_json::from_str("\"toserver\"").unwrap();
+        let to_client: MessageDirection = serde_json::from_str("\"toclient\"").unwrap();
+
+        assert_eq!(to_server, MessageDirection::ToServer);
+        assert_eq!(to_client, MessageDirection::ToClient);
+    }
+
+    #[test]
+    fn test_session_recorder_new() {
+        let recorder = SessionRecorder::new(
+            "session-1".to_string(),
+            "Test Session".to_string(),
+            "stdio".to_string(),
+        );
+
+        assert!(recorder.get_server_id().is_none());
+    }
+
+    #[test]
+    fn test_session_recorder_with_server() {
+        let server_id = ServerIdentifier {
+            name: "filesystem-server".to_string(),
+            version: Some("1.0.0".to_string()),
+            command: "npx".to_string(),
+            args: vec!["@modelcontextprotocol/server-filesystem".to_string()],
+            connection_type: "stdio".to_string(),
+        };
+
+        let recorder = SessionRecorder::with_server(
+            "session-2".to_string(),
+            "Test Session".to_string(),
+            "stdio".to_string(),
+            server_id,
+        );
+
+        let server = recorder.get_server_id().unwrap();
+        assert_eq!(server.name, "filesystem-server");
+        assert_eq!(server.version, Some("1.0.0".to_string()));
+    }
+
+    #[tokio::test]
+    async fn test_session_recorder_tags() {
+        let recorder = SessionRecorder::new(
+            "session-3".to_string(),
+            "Tag Test".to_string(),
+            "stdio".to_string(),
+        );
+
+        // Add tags
+        recorder.add_tag("production".to_string()).await;
+        recorder.add_tag("debugging".to_string()).await;
+
+        let tags = recorder.get_tags().await;
+        assert_eq!(tags.len(), 2);
+        assert!(tags.contains(&"production".to_string()));
+        assert!(tags.contains(&"debugging".to_string()));
+
+        // Add duplicate tag (should not increase count)
+        recorder.add_tag("production".to_string()).await;
+        let tags = recorder.get_tags().await;
+        assert_eq!(tags.len(), 2);
+
+        // Remove tag
+        recorder.remove_tag("debugging").await;
+        let tags = recorder.get_tags().await;
+        assert_eq!(tags.len(), 1);
+        assert!(tags.contains(&"production".to_string()));
+    }
+
+    #[tokio::test]
+    async fn test_session_recorder_record_message() {
+        let recorder = SessionRecorder::new(
+            "session-4".to_string(),
+            "Message Test".to_string(),
+            "stdio".to_string(),
+        );
+
+        let content = serde_json::json!({
+            "jsonrpc": "2.0",
+            "method": "tools/list",
+            "id": 1
+        });
+
+        recorder.record_message(content, MessageDirection::ToServer).await.unwrap();
+
+        let stats = recorder.get_stats().await;
+        assert_eq!(stats.message_count, 1);
+        assert_eq!(stats.to_server_count, 1);
+        assert_eq!(stats.to_client_count, 0);
+    }
+
+    #[tokio::test]
+    async fn test_session_recorder_get_stats() {
+        let recorder = SessionRecorder::new(
+            "session-5".to_string(),
+            "Stats Test".to_string(),
+            "stdio".to_string(),
+        );
+
+        // Add multiple messages
+        let request = serde_json::json!({"jsonrpc": "2.0", "method": "ping", "id": 1});
+        let response = serde_json::json!({"jsonrpc": "2.0", "result": {}, "id": 1});
+
+        recorder.record_message(request, MessageDirection::ToServer).await.unwrap();
+        recorder.record_message(response, MessageDirection::ToClient).await.unwrap();
+
+        let stats = recorder.get_stats().await;
+        assert_eq!(stats.session_id, "session-5");
+        assert_eq!(stats.message_count, 2);
+        assert_eq!(stats.to_server_count, 1);
+        assert_eq!(stats.to_client_count, 1);
+    }
+
+    #[tokio::test]
+    async fn test_session_recorder_finalize() {
+        let recorder = SessionRecorder::new(
+            "session-6".to_string(),
+            "Finalize Test".to_string(),
+            "sse".to_string(),
+        );
+
+        recorder.add_tag("test".to_string()).await;
+
+        let content = serde_json::json!({"jsonrpc": "2.0", "method": "initialize", "id": 1});
+        recorder.record_message(content, MessageDirection::ToServer).await.unwrap();
+
+        let session = recorder.finalize().await.unwrap();
+
+        assert_eq!(session.id, "session-6");
+        assert_eq!(session.name, "Finalize Test");
+        assert!(session.ended_at.is_some());
+        assert_eq!(session.messages.len(), 1);
+        assert_eq!(session.metadata.transport, "sse");
+        assert_eq!(session.metadata.message_count, 1);
+        assert!(session.metadata.tags.contains(&"test".to_string()));
+    }
+
+    #[test]
+    fn test_recorded_message_metadata_extraction() {
+        let metadata = MessageMetadata {
+            method: Some("tools/call".to_string()),
+            jsonrpc_id: Some(serde_json::json!(42)),
+            injected: false,
+            modified: true,
+            size_bytes: 256,
+        };
+
+        assert_eq!(metadata.method, Some("tools/call".to_string()));
+        assert_eq!(metadata.jsonrpc_id, Some(serde_json::json!(42)));
+        assert!(!metadata.injected);
+        assert!(metadata.modified);
+        assert_eq!(metadata.size_bytes, 256);
+    }
+
+    #[test]
+    fn test_server_identifier_serialization() {
+        let server_id = ServerIdentifier {
+            name: "test-server".to_string(),
+            version: Some("2.0.0".to_string()),
+            command: "node".to_string(),
+            args: vec!["server.js".to_string(), "--port".to_string(), "3000".to_string()],
+            connection_type: "websocket".to_string(),
+        };
+
+        let json = serde_json::to_string(&server_id).unwrap();
+        assert!(json.contains("\"name\":\"test-server\""));
+        assert!(json.contains("\"version\":\"2.0.0\""));
+        assert!(json.contains("\"connection_type\":\"websocket\""));
+
+        let deserialized: ServerIdentifier = serde_json::from_str(&json).unwrap();
+        assert_eq!(deserialized.name, "test-server");
+        assert_eq!(deserialized.args.len(), 3);
+    }
+
+    #[test]
+    fn test_client_server_info() {
+        let client = ClientInfo {
+            name: "Claude Desktop".to_string(),
+            version: "1.0.0".to_string(),
+        };
+
+        let server = ServerInfo {
+            name: "MCP Server".to_string(),
+            version: "0.1.0".to_string(),
+        };
+
+        let client_json = serde_json::to_string(&client).unwrap();
+        let server_json = serde_json::to_string(&server).unwrap();
+
+        assert!(client_json.contains("Claude Desktop"));
+        assert!(server_json.contains("MCP Server"));
+    }
+
+    #[test]
+    fn test_session_metadata_defaults() {
+        let metadata = SessionMetadata {
+            transport: "stdio".to_string(),
+            message_count: 0,
+            duration_ms: None,
+            client_info: None,
+            server_info: None,
+            server_id: None,
+            tags: vec![],
+        };
+
+        assert!(metadata.client_info.is_none());
+        assert!(metadata.server_info.is_none());
+        assert!(metadata.server_id.is_none());
+        assert!(metadata.tags.is_empty());
+    }
+
+    #[test]
+    fn test_recorder_error_display() {
+        let time_err = RecorderError::TimeError("time went backwards".to_string());
+        let ser_err = RecorderError::SerializationError("invalid json".to_string());
+        let storage_err = RecorderError::StorageError("disk full".to_string());
+
+        assert_eq!(time_err.to_string(), "Time error: time went backwards");
+        assert_eq!(ser_err.to_string(), "Serialization error: invalid json");
+        assert_eq!(storage_err.to_string(), "Storage error: disk full");
+    }
+
+    #[test]
+    fn test_uuid_format() {
+        let uuid = uuid::Uuid::new_v4();
+        let uuid_str = uuid.to_string();
+
+        // UUID v4 format: xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx
+        assert_eq!(uuid_str.len(), 36);
+        assert_eq!(&uuid_str[8..9], "-");
+        assert_eq!(&uuid_str[13..14], "-");
+        assert_eq!(&uuid_str[14..15], "4"); // Version 4
+        assert_eq!(&uuid_str[18..19], "-");
+        assert_eq!(&uuid_str[23..24], "-");
+    }
+
+    #[test]
+    fn test_recorded_session_serialization() {
+        let session = RecordedSession {
+            id: "session-test".to_string(),
+            name: "Test".to_string(),
+            started_at: 1700000000000000,
+            ended_at: Some(1700000001000000),
+            messages: vec![],
+            metadata: SessionMetadata {
+                transport: "stdio".to_string(),
+                message_count: 0,
+                duration_ms: Some(1000),
+                client_info: None,
+                server_info: None,
+                server_id: None,
+                tags: vec!["test".to_string()],
+            },
+        };
+
+        let json = serde_json::to_string(&session).unwrap();
+        let deserialized: RecordedSession = serde_json::from_str(&json).unwrap();
+
+        assert_eq!(deserialized.id, "session-test");
+        assert_eq!(deserialized.metadata.duration_ms, Some(1000));
+        assert!(deserialized.metadata.tags.contains(&"test".to_string()));
+    }
+}

@@ -1,8 +1,7 @@
 <h1 align="center">RETICLE</h1>
 
 <p align="center">
-  <strong>The Observability & Security Proxy for MCP</strong><br/>
-  <em>Model Context Protocol</em>
+  <strong>The Wireshark for the Model Context Protocol</strong>
 </p>
 
 <p align="center">
@@ -13,11 +12,11 @@
 </p>
 
 <p align="center">
-  <strong>"Wireshark for AI Agents."</strong>
+  <em>See what your Agent sees.</em>
 </p>
 
 <p align="center">
-  Stop guessing why your agent stalled. Reticle gives you X-ray vision into the JSON-RPC traffic between your LLM and your tools.
+  Reticle intercepts, visualizes, and profiles JSON-RPC traffic between your LLM and MCP servers in real-time — with zero latency overhead. Stop debugging blind. Start seeing everything.
 </p>
 
 ---
