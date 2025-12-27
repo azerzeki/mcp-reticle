@@ -1,5 +1,7 @@
 import { cn } from '@/lib/utils'
-import logoImage from '@/assets/logo.png'
+import logoDark from '@/assets/logo.png'        // Black logo for light theme
+import logoLight from '@/assets/logo-white.png' // White logo for dark theme
+import { useTheme } from '@/components/theme-provider'
 
 interface LogoProps {
   variant?: 'full' | 'icon' | 'compact'
@@ -12,11 +14,14 @@ interface LogoProps {
  * Custom brand logo
  */
 export function Logo({ variant = 'full', className, showGlow = false }: LogoProps) {
+  const { resolvedTheme } = useTheme()
+  const logoSrc = resolvedTheme === 'dark' ? logoLight : logoDark
+
   if (variant === 'icon') {
     return (
       <div className={cn('relative inline-flex', className)}>
         <img
-          src={logoImage}
+          src={logoSrc}
           alt="Reticle"
           className={cn(
             'w-8 h-8 object-contain',
@@ -31,7 +36,7 @@ export function Logo({ variant = 'full', className, showGlow = false }: LogoProp
     return (
       <div className={cn('inline-flex items-center gap-2.5', className)}>
         <img
-          src={logoImage}
+          src={logoSrc}
           alt="Reticle"
           className={cn(
             'w-7 h-7 object-contain',
@@ -50,7 +55,7 @@ export function Logo({ variant = 'full', className, showGlow = false }: LogoProp
     <div className={cn('inline-flex flex-col gap-1', className)}>
       <div className="flex items-center gap-2.5">
         <img
-          src={logoImage}
+          src={logoSrc}
           alt="Reticle"
           className={cn(
             'w-9 h-9 object-contain',
