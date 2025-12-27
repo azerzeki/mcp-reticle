@@ -45,13 +45,34 @@ jobs:
             target/
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
 
-      - name: Check formatting
+      - name: Check formatting (reticle-core)
+        run: cd crates/reticle-core && cargo fmt --check
+
+      - name: Check formatting (reticle-cli)
+        run: cd crates/reticle-cli && cargo fmt --check
+
+      - name: Check formatting (src-tauri)
         run: cd src-tauri && cargo fmt --check
 
-      - name: Clippy
+      - name: Clippy (reticle-core)
+        run: cd crates/reticle-core && cargo clippy -- -D warnings
+
+      - name: Clippy (reticle-cli)
+        run: cd crates/reticle-cli && cargo clippy -- -D warnings
+
+      - name: Clippy (src-tauri)
         run: cd src-tauri && cargo clippy -- -D warnings
 
-      - name: Build
+      - name: Test (reticle-core)
+        run: cd crates/reticle-core && cargo test
+
+      - name: Test (src-tauri)
+        run: cd src-tauri && cargo test
+
+      - name: Build (reticle-cli)
+        run: cd crates/reticle-cli && cargo build
+
+      - name: Build (src-tauri)
         run: cd src-tauri && cargo build
 
   frontend:
@@ -106,6 +127,9 @@ jobs:
 
       - name: Build frontend
         run: cd frontend && npm run build
+
+      - name: Build CLI
+        run: cd crates/reticle-cli && cargo build --release
 
       - name: Build Tauri app
         run: cd src-tauri && cargo build --release

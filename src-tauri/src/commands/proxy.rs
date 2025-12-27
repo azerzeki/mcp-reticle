@@ -2,7 +2,9 @@ use tauri::{AppHandle, State};
 use tokio::process::Command;
 
 use crate::commands::demo::load_demo_data;
-use crate::core::{run_proxy, start_sse_proxy, start_streamable_proxy, start_websocket_proxy, TransportConfig};
+use crate::core::{
+    run_proxy, start_sse_proxy, start_streamable_proxy, start_websocket_proxy, TransportConfig,
+};
 use crate::error::AppError;
 use crate::events::session_events::emit_session_start;
 use crate::state::AppState;

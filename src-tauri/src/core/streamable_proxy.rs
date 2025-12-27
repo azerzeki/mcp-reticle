@@ -171,10 +171,7 @@ async fn handle_post(
     body: String,
 ) -> Response {
     debug!("Received POST request");
-    eprintln!(
-        "[STREAMABLE PROXY] POST: {}",
-        &body[..body.len().min(200)]
-    );
+    eprintln!("[STREAMABLE PROXY] POST: {}", &body[..body.len().min(200)]);
 
     // Parse the incoming JSON-RPC message(s)
     let messages: Vec<serde_json::Value> = match serde_json::from_str::<serde_json::Value>(&body) {
@@ -355,10 +352,7 @@ async fn handle_post(
 }
 
 /// Handle SSE streaming response from upstream
-async fn handle_sse_response(
-    state: StreamableProxyState,
-    response: reqwest::Response,
-) -> Response {
+async fn handle_sse_response(state: StreamableProxyState, response: reqwest::Response) -> Response {
     let session_id = state.session_id.clone();
     let app_handle = state.app_handle.clone();
     let recorder = state.recorder.clone();
@@ -578,10 +572,7 @@ async fn log_outgoing_message(state: &StreamableProxyState, json: serde_json::Va
     // Record if recording is active
     let recorder_lock = state.recorder.lock().await;
     if let Some(ref rec) = *recorder_lock {
-        if let Err(e) = rec
-            .record_message(json, MessageDirection::ToClient)
-            .await
-        {
+        if let Err(e) = rec.record_message(json, MessageDirection::ToClient).await {
             warn!("Failed to record message: {}", e);
         }
     }

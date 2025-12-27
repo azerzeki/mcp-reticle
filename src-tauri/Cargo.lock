@@ -420,8 +420,10 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "145052bdd345b87320e369255277e3fb5152762ad123a901ef5c262dd38fe8d2"
 dependencies = [
  "iana-time-zone",
+ "js-sys",
  "num-traits",
  "serde",
+ "wasm-bindgen",
  "windows-link 0.2.1",
 ]
 
@@ -3287,6 +3289,7 @@ dependencies = [
  "futures",
  "futures-util",
  "reqwest 0.11.27",
+ "reticle-core",
  "serde",
  "serde_json",
  "sled",
@@ -3302,6 +3305,22 @@ dependencies = [
  "tower-http 0.5.2",
  "tracing",
  "tracing-subscriber",
+]
+
+[[package]]
+name = "reticle-core"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "bincode",
+ "chrono",
+ "dirs 5.0.1",
+ "serde",
+ "serde_json",
+ "sled",
+ "thiserror 1.0.69",
+ "tokio",
+ "tracing",
 ]
 
 [[package]]

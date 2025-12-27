@@ -53,15 +53,32 @@ build:
 
 # Check Rust code without building
 check:
+    cd crates/reticle-core && cargo check
+    cd crates/reticle-cli && cargo check
     cd src-tauri && cargo check
 
 # Run clippy lints
 lint:
+    cd crates/reticle-core && cargo clippy -- -D warnings
+    cd crates/reticle-cli && cargo clippy -- -D warnings
     cd src-tauri && cargo clippy -- -D warnings
 
 # Format code
 fmt:
+    cd crates/reticle-core && cargo fmt
+    cd crates/reticle-cli && cargo fmt
     cd src-tauri && cargo fmt
+
+# Run tests
+test:
+    cd crates/reticle-core && cargo test
+    cd src-tauri && cargo test
+
+# Build CLI only (copies to ./target/release for consistency)
+build-cli:
+    cd crates/reticle-cli && cargo build --release
+    mkdir -p target/release
+    cp crates/reticle-cli/target/release/reticle target/release/
 
 # Install frontend dependencies
 setup:
@@ -80,13 +97,8 @@ test-direct:
         npx -y @anthropics/mcp-server-memory 2>/dev/null | head -1
 
 # ============================================================================
-# Testing - With Proxy (mcp-sentinel)
+# Testing - With Proxy (reticle-cli)
 # ============================================================================
-
-# Build mcp-sentinel proxy
-build-sentinel:
-    cd target/release 2>/dev/null || cargo build --release --manifest-path src-tauri/Cargo.toml
-    @echo "Sentinel built at target/release/mcp-sentinel (if available)"
 
 # Test with proxy on default port (3001)
 test-proxy port="3001":
@@ -94,7 +106,7 @@ test-proxy port="3001":
     set -euo pipefail
     echo "Testing MCP server through proxy on port {{port}}..."
     echo '{"jsonrpc":"2.0","method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"test","version":"1.0"}},"id":1}' | \
-        ./target/release/mcp-sentinel --port {{port}} -- npx -y @anthropics/mcp-server-memory 2>/dev/null | head -1
+        ./target/release/reticle --port {{port}} -- npx -y @anthropics/mcp-server-memory 2>/dev/null | head -1
 
 # Stress test with multiple sequential requests
 test-stress count="100":
@@ -103,7 +115,7 @@ test-stress count="100":
     echo "Running stress test with {{count}} requests..."
     for i in $(seq 1 {{count}}); do
         echo '{"jsonrpc":"2.0","method":"ping","id":'$i'}' | \
-            ./target/release/mcp-sentinel --port 3001 -- cat 2>/dev/null
+            ./target/release/reticle --port 3001 -- cat 2>/dev/null
     done
     echo "Stress test complete: {{count}} requests sent"
 
@@ -155,6 +167,8 @@ clean:
     rm -rf frontend/node_modules/
     rm -rf frontend/dist/
     rm -rf src-tauri/target/
+    rm -rf crates/reticle-core/target/
+    rm -rf crates/reticle-cli/target/
 
 # Show project info
 info:
@@ -162,14 +176,18 @@ info:
     @echo "================================="
     @echo ""
     @echo "Project structure:"
-    @echo "  frontend/     - React frontend"
-    @echo "  src-tauri/    - Rust backend (Tauri)"
-    @echo "  scripts/      - Python test utilities"
+    @echo "  frontend/           - React frontend"
+    @echo "  src-tauri/          - Tauri desktop app"
+    @echo "  crates/reticle-core - Core library (protocol, token counting)"
+    @echo "  crates/reticle-cli  - Standalone CLI proxy"
+    @echo "  scripts/            - Python test utilities"
     @echo ""
     @echo "Quick start:"
-    @echo "  just setup    - Install dependencies"
-    @echo "  just dev      - Start development server"
-    @echo "  just build    - Build for production"
+    @echo "  just setup     - Install dependencies"
+    @echo "  just dev       - Start development server"
+    @echo "  just build     - Build for production"
+    @echo "  just build-cli - Build CLI only"
+    @echo "  just test      - Run all tests"
 
 # Show current Rust/Node versions
 versions:

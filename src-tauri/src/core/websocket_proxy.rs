@@ -197,8 +197,12 @@ async fn handle_websocket(client_socket: WebSocket, state: WebSocketProxyState) 
                     // Log the message
                     if let Ok(json) = serde_json::from_str::<serde_json::Value>(&text) {
                         let id = generate_message_id();
-                        let entry =
-                            LogEntry::new(id, session_id_clone.clone(), Direction::In, json.clone());
+                        let entry = LogEntry::new(
+                            id,
+                            session_id_clone.clone(),
+                            Direction::In,
+                            json.clone(),
+                        );
 
                         if let Err(e) = app_handle_clone.emit("log-event", &entry) {
                             warn!("Failed to emit log event: {}", e);
@@ -207,9 +211,8 @@ async fn handle_websocket(client_socket: WebSocket, state: WebSocketProxyState) 
                         // Record message
                         let recorder_lock = recorder_clone.lock().await;
                         if let Some(ref rec) = *recorder_lock {
-                            if let Err(e) = rec
-                                .record_message(json, MessageDirection::ToServer)
-                                .await
+                            if let Err(e) =
+                                rec.record_message(json, MessageDirection::ToServer).await
                             {
                                 warn!("Failed to record message: {}", e);
                             }
@@ -299,8 +302,12 @@ async fn handle_websocket(client_socket: WebSocket, state: WebSocketProxyState) 
                     // Log the message
                     if let Ok(json) = serde_json::from_str::<serde_json::Value>(&text) {
                         let id = generate_message_id();
-                        let entry =
-                            LogEntry::new(id, session_id_clone.clone(), Direction::Out, json.clone());
+                        let entry = LogEntry::new(
+                            id,
+                            session_id_clone.clone(),
+                            Direction::Out,
+                            json.clone(),
+                        );
 
                         if let Err(e) = app_handle_clone.emit("log-event", &entry) {
                             warn!("Failed to emit log event: {}", e);
@@ -309,9 +316,8 @@ async fn handle_websocket(client_socket: WebSocket, state: WebSocketProxyState) 
                         // Record message
                         let recorder_lock = recorder_clone.lock().await;
                         if let Some(ref rec) = *recorder_lock {
-                            if let Err(e) = rec
-                                .record_message(json, MessageDirection::ToClient)
-                                .await
+                            if let Err(e) =
+                                rec.record_message(json, MessageDirection::ToClient).await
                             {
                                 warn!("Failed to record message: {}", e);
                             }

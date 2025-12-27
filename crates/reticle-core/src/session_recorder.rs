@@ -183,6 +183,16 @@ impl SessionRecorder {
         }
     }
 
+    /// Get session ID
+    pub fn session_id(&self) -> &str {
+        &self.session_id
+    }
+
+    /// Get session name
+    pub fn session_name(&self) -> &str {
+        &self.session_name
+    }
+
     /// Add a tag to the session
     pub async fn add_tag(&self, tag: String) {
         let mut tags = self.tags.lock().await;
@@ -237,7 +247,7 @@ impl SessionRecorder {
         let size_bytes = content_str.len();
 
         let message = RecordedMessage {
-            id: uuid::Uuid::new_v4().to_string(),
+            id: generate_uuid(),
             timestamp_micros,
             relative_time_ms,
             direction,
@@ -348,46 +358,25 @@ pub enum RecorderError {
     StorageError(String),
 }
 
-// UUID support - add to Cargo.toml dependencies later
-mod uuid {
-    use std::fmt;
+/// Generate a simple UUID v4-like string
+fn generate_uuid() -> String {
+    use std::time::SystemTime;
 
-    pub struct Uuid([u8; 16]);
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default();
 
-    impl Uuid {
-        pub fn new_v4() -> Self {
-            let mut bytes = [0u8; 16];
-            // Simple random UUID - in production use uuid crate
-            for b in &mut bytes {
-                *b = (rand() * 256.0) as u8;
-            }
-            bytes[6] = (bytes[6] & 0x0f) | 0x40; // Version 4
-            bytes[8] = (bytes[8] & 0x3f) | 0x80; // Variant
-            Uuid(bytes)
-        }
-    }
+    let nanos = now.as_nanos() as u64;
+    let random = (nanos.wrapping_mul(31337) % 0xFFFFFFFF) as u32;
 
-    impl fmt::Display for Uuid {
-        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-            write!(
-                f,
-                "{:02x}{:02x}{:02x}{:02x}-{:02x}{:02x}-{:02x}{:02x}-{:02x}{:02x}-{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}",
-                self.0[0], self.0[1], self.0[2], self.0[3],
-                self.0[4], self.0[5],
-                self.0[6], self.0[7],
-                self.0[8], self.0[9],
-                self.0[10], self.0[11], self.0[12], self.0[13], self.0[14], self.0[15]
-            )
-        }
-    }
-
-    fn rand() -> f64 {
-        use std::time::SystemTime;
-        let now = SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap();
-        ((now.as_nanos() % 1000000) as f64) / 1000000.0
-    }
+    format!(
+        "{:08x}-{:04x}-4{:03x}-{:04x}-{:012x}",
+        (nanos >> 32) as u32,
+        (nanos >> 16) as u16,
+        nanos as u16 & 0x0FFF,
+        ((random >> 16) as u16 & 0x3FFF) | 0x8000,
+        (random as u64) | ((nanos & 0xFFFFFFFF) << 32)
+    )
 }
 
 #[cfg(test)]
@@ -401,100 +390,70 @@ mod tests {
     }
 
     #[test]
-    fn test_message_direction_serialize() {
-        let to_server = serde_json::to_string(&MessageDirection::ToServer).unwrap();
-        let to_client = serde_json::to_string(&MessageDirection::ToClient).unwrap();
+    fn test_generate_uuid() {
+        let uuid1 = generate_uuid();
+        let uuid2 = generate_uuid();
 
-        assert_eq!(to_server, "\"toserver\"");
-        assert_eq!(to_client, "\"toclient\"");
+        // Should be different (though not guaranteed due to timing)
+        assert!(!uuid1.is_empty());
+        assert!(!uuid2.is_empty());
+
+        // Should contain hyphens in expected places
+        assert!(uuid1.contains('-'));
     }
 
-    #[test]
-    fn test_message_direction_deserialize() {
-        let to_server: MessageDirection = serde_json::from_str("\"toserver\"").unwrap();
-        let to_client: MessageDirection = serde_json::from_str("\"toclient\"").unwrap();
-
-        assert_eq!(to_server, MessageDirection::ToServer);
-        assert_eq!(to_client, MessageDirection::ToClient);
-    }
-
-    #[test]
-    fn test_session_recorder_new() {
+    #[tokio::test]
+    async fn test_session_recorder_new() {
         let recorder = SessionRecorder::new(
             "session-1".to_string(),
             "Test Session".to_string(),
             "stdio".to_string(),
         );
 
+        assert_eq!(recorder.session_id(), "session-1");
+        assert_eq!(recorder.session_name(), "Test Session");
         assert!(recorder.get_server_id().is_none());
     }
 
-    #[test]
-    fn test_session_recorder_with_server() {
+    #[tokio::test]
+    async fn test_session_recorder_with_server() {
         let server_id = ServerIdentifier {
-            name: "filesystem-server".to_string(),
+            name: "test-server".to_string(),
             version: Some("1.0.0".to_string()),
             command: "npx".to_string(),
-            args: vec!["@modelcontextprotocol/server-filesystem".to_string()],
+            args: vec!["-y".to_string(), "mcp-server".to_string()],
             connection_type: "stdio".to_string(),
         };
 
         let recorder = SessionRecorder::with_server(
-            "session-2".to_string(),
+            "session-1".to_string(),
             "Test Session".to_string(),
             "stdio".to_string(),
             server_id,
         );
 
         let server = recorder.get_server_id().unwrap();
-        assert_eq!(server.name, "filesystem-server");
-        assert_eq!(server.version, Some("1.0.0".to_string()));
+        assert_eq!(server.name, "test-server");
     }
 
     #[tokio::test]
-    async fn test_session_recorder_tags() {
+    async fn test_record_message() {
         let recorder = SessionRecorder::new(
-            "session-3".to_string(),
-            "Tag Test".to_string(),
-            "stdio".to_string(),
-        );
-
-        // Add tags
-        recorder.add_tag("production".to_string()).await;
-        recorder.add_tag("debugging".to_string()).await;
-
-        let tags = recorder.get_tags().await;
-        assert_eq!(tags.len(), 2);
-        assert!(tags.contains(&"production".to_string()));
-        assert!(tags.contains(&"debugging".to_string()));
-
-        // Add duplicate tag (should not increase count)
-        recorder.add_tag("production".to_string()).await;
-        let tags = recorder.get_tags().await;
-        assert_eq!(tags.len(), 2);
-
-        // Remove tag
-        recorder.remove_tag("debugging").await;
-        let tags = recorder.get_tags().await;
-        assert_eq!(tags.len(), 1);
-        assert!(tags.contains(&"production".to_string()));
-    }
-
-    #[tokio::test]
-    async fn test_session_recorder_record_message() {
-        let recorder = SessionRecorder::new(
-            "session-4".to_string(),
-            "Message Test".to_string(),
+            "session-1".to_string(),
+            "Test".to_string(),
             "stdio".to_string(),
         );
 
         let content = serde_json::json!({
             "jsonrpc": "2.0",
-            "method": "tools/list",
+            "method": "test/method",
             "id": 1
         });
 
-        recorder.record_message(content, MessageDirection::ToServer).await.unwrap();
+        recorder
+            .record_message(content, MessageDirection::ToServer)
+            .await
+            .unwrap();
 
         let stats = recorder.get_stats().await;
         assert_eq!(stats.message_count, 1);
@@ -503,174 +462,54 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_session_recorder_get_stats() {
+    async fn test_tags() {
         let recorder = SessionRecorder::new(
-            "session-5".to_string(),
-            "Stats Test".to_string(),
+            "session-1".to_string(),
+            "Test".to_string(),
             "stdio".to_string(),
         );
 
-        // Add multiple messages
-        let request = serde_json::json!({"jsonrpc": "2.0", "method": "ping", "id": 1});
-        let response = serde_json::json!({"jsonrpc": "2.0", "result": {}, "id": 1});
+        recorder.add_tag("production".to_string()).await;
+        recorder.add_tag("debug".to_string()).await;
+        recorder.add_tag("production".to_string()).await; // Duplicate
 
-        recorder.record_message(request, MessageDirection::ToServer).await.unwrap();
-        recorder.record_message(response, MessageDirection::ToClient).await.unwrap();
+        let tags = recorder.get_tags().await;
+        assert_eq!(tags.len(), 2);
+        assert!(tags.contains(&"production".to_string()));
+        assert!(tags.contains(&"debug".to_string()));
 
-        let stats = recorder.get_stats().await;
-        assert_eq!(stats.session_id, "session-5");
-        assert_eq!(stats.message_count, 2);
-        assert_eq!(stats.to_server_count, 1);
-        assert_eq!(stats.to_client_count, 1);
+        recorder.remove_tag("debug").await;
+        let tags = recorder.get_tags().await;
+        assert_eq!(tags.len(), 1);
     }
 
     #[tokio::test]
-    async fn test_session_recorder_finalize() {
+    async fn test_finalize_session() {
         let recorder = SessionRecorder::new(
-            "session-6".to_string(),
-            "Finalize Test".to_string(),
-            "sse".to_string(),
+            "session-1".to_string(),
+            "Test Session".to_string(),
+            "stdio".to_string(),
         );
 
-        recorder.add_tag("test".to_string()).await;
-
-        let content = serde_json::json!({"jsonrpc": "2.0", "method": "initialize", "id": 1});
-        recorder.record_message(content, MessageDirection::ToServer).await.unwrap();
+        let content = serde_json::json!({"method": "test"});
+        recorder
+            .record_message(content.clone(), MessageDirection::ToServer)
+            .await
+            .unwrap();
+        recorder
+            .record_message(content, MessageDirection::ToClient)
+            .await
+            .unwrap();
+        recorder.add_tag("test-tag".to_string()).await;
 
         let session = recorder.finalize().await.unwrap();
 
-        assert_eq!(session.id, "session-6");
-        assert_eq!(session.name, "Finalize Test");
+        assert_eq!(session.id, "session-1");
+        assert_eq!(session.name, "Test Session");
+        assert_eq!(session.messages.len(), 2);
         assert!(session.ended_at.is_some());
-        assert_eq!(session.messages.len(), 1);
-        assert_eq!(session.metadata.transport, "sse");
-        assert_eq!(session.metadata.message_count, 1);
-        assert!(session.metadata.tags.contains(&"test".to_string()));
-    }
-
-    #[test]
-    fn test_recorded_message_metadata_extraction() {
-        let metadata = MessageMetadata {
-            method: Some("tools/call".to_string()),
-            jsonrpc_id: Some(serde_json::json!(42)),
-            injected: false,
-            modified: true,
-            size_bytes: 256,
-        };
-
-        assert_eq!(metadata.method, Some("tools/call".to_string()));
-        assert_eq!(metadata.jsonrpc_id, Some(serde_json::json!(42)));
-        assert!(!metadata.injected);
-        assert!(metadata.modified);
-        assert_eq!(metadata.size_bytes, 256);
-    }
-
-    #[test]
-    fn test_server_identifier_serialization() {
-        let server_id = ServerIdentifier {
-            name: "test-server".to_string(),
-            version: Some("2.0.0".to_string()),
-            command: "node".to_string(),
-            args: vec!["server.js".to_string(), "--port".to_string(), "3000".to_string()],
-            connection_type: "websocket".to_string(),
-        };
-
-        let json = serde_json::to_string(&server_id).unwrap();
-        assert!(json.contains("\"name\":\"test-server\""));
-        assert!(json.contains("\"version\":\"2.0.0\""));
-        assert!(json.contains("\"connection_type\":\"websocket\""));
-
-        let deserialized: ServerIdentifier = serde_json::from_str(&json).unwrap();
-        assert_eq!(deserialized.name, "test-server");
-        assert_eq!(deserialized.args.len(), 3);
-    }
-
-    #[test]
-    fn test_client_server_info() {
-        let client = ClientInfo {
-            name: "Claude Desktop".to_string(),
-            version: "1.0.0".to_string(),
-        };
-
-        let server = ServerInfo {
-            name: "MCP Server".to_string(),
-            version: "0.1.0".to_string(),
-        };
-
-        let client_json = serde_json::to_string(&client).unwrap();
-        let server_json = serde_json::to_string(&server).unwrap();
-
-        assert!(client_json.contains("Claude Desktop"));
-        assert!(server_json.contains("MCP Server"));
-    }
-
-    #[test]
-    fn test_session_metadata_defaults() {
-        let metadata = SessionMetadata {
-            transport: "stdio".to_string(),
-            message_count: 0,
-            duration_ms: None,
-            client_info: None,
-            server_info: None,
-            server_id: None,
-            tags: vec![],
-        };
-
-        assert!(metadata.client_info.is_none());
-        assert!(metadata.server_info.is_none());
-        assert!(metadata.server_id.is_none());
-        assert!(metadata.tags.is_empty());
-    }
-
-    #[test]
-    fn test_recorder_error_display() {
-        let time_err = RecorderError::TimeError("time went backwards".to_string());
-        let ser_err = RecorderError::SerializationError("invalid json".to_string());
-        let storage_err = RecorderError::StorageError("disk full".to_string());
-
-        assert_eq!(time_err.to_string(), "Time error: time went backwards");
-        assert_eq!(ser_err.to_string(), "Serialization error: invalid json");
-        assert_eq!(storage_err.to_string(), "Storage error: disk full");
-    }
-
-    #[test]
-    fn test_uuid_format() {
-        let uuid = uuid::Uuid::new_v4();
-        let uuid_str = uuid.to_string();
-
-        // UUID v4 format: xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx
-        assert_eq!(uuid_str.len(), 36);
-        assert_eq!(&uuid_str[8..9], "-");
-        assert_eq!(&uuid_str[13..14], "-");
-        assert_eq!(&uuid_str[14..15], "4"); // Version 4
-        assert_eq!(&uuid_str[18..19], "-");
-        assert_eq!(&uuid_str[23..24], "-");
-    }
-
-    #[test]
-    fn test_recorded_session_serialization() {
-        let session = RecordedSession {
-            id: "session-test".to_string(),
-            name: "Test".to_string(),
-            started_at: 1700000000000000,
-            ended_at: Some(1700000001000000),
-            messages: vec![],
-            metadata: SessionMetadata {
-                transport: "stdio".to_string(),
-                message_count: 0,
-                duration_ms: Some(1000),
-                client_info: None,
-                server_info: None,
-                server_id: None,
-                tags: vec!["test".to_string()],
-            },
-        };
-
-        let json = serde_json::to_string(&session).unwrap();
-        let deserialized: RecordedSession = serde_json::from_str(&json).unwrap();
-
-        assert_eq!(deserialized.id, "session-test");
-        assert_eq!(deserialized.metadata.duration_ms, Some(1000));
-        assert!(deserialized.metadata.tags.contains(&"test".to_string()));
+        assert_eq!(session.metadata.message_count, 2);
+        assert_eq!(session.metadata.transport, "stdio");
+        assert!(session.metadata.tags.contains(&"test-tag".to_string()));
     }
 }

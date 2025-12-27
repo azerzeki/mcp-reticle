@@ -1,6 +1,6 @@
-# MCP Sentinel Testing Guide
+# Reticle Testing Guide
 
-Complete guide for testing MCP Sentinel with stdio transport, HTTP/SSE transport, mock servers, and real MCP servers.
+Complete guide for testing Reticle with stdio transport, HTTP/SSE transport, mock servers, and real MCP servers.
 
 ## Table of Contents
 
@@ -30,7 +30,7 @@ Complete guide for testing MCP Sentinel with stdio transport, HTTP/SSE transport
 # 4. Watch ~225 messages appear in real-time!
 ```
 
-This is the fastest way to verify MCP Sentinel is working correctly.
+This is the fastest way to verify Reticle is working correctly.
 
 ## stdio Transport Testing
 
@@ -172,7 +172,7 @@ data: {"jsonrpc":"2.0","method":"notifications/progress","params":{...}}
 # Terminal 1: Start mock SSE server
 python3 scripts/mock-mcp-sse-server.py --port 8080
 
-# Terminal 2: Start MCP Sentinel
+# Terminal 2: Start Reticle
 ./scripts/dev.sh
 
 # In browser console (F12):
@@ -191,7 +191,7 @@ curl -N http://localhost:3001/events
 ```
 
 **Expected Output:**
-- SSE events proxied through MCP Sentinel
+- SSE events proxied through Reticle
 - Messages appear in UI (via log-event emission)
 - Both terminals show same events
 
@@ -253,7 +253,7 @@ Demo mode loads pre-generated MCP conversation data without requiring any extern
 ```bash
 # 1. Clone and build
 git clone <repo-url>
-cd mcp-sentinel
+cd reticle
 cargo build --manifest-path src-tauri/Cargo.toml
 
 # 2. Start app
@@ -378,19 +378,19 @@ Enable debug logging:
 export RUST_LOG=debug
 
 # Start app with logging
-./scripts/dev.sh 2>&1 | tee /tmp/mcp-sentinel-debug.log
+./scripts/dev.sh 2>&1 | tee /tmp/reticle-debug.log
 ```
 
 **View logs in real-time:**
 ```bash
 # All logs
-tail -f /tmp/mcp-sentinel-debug.log
+tail -f /tmp/reticle-debug.log
 
 # Just proxy events
-tail -f /tmp/mcp-sentinel-debug.log | grep "proxy"
+tail -f /tmp/reticle-debug.log | grep "proxy"
 
 # Just log events
-tail -f /tmp/mcp-sentinel-debug.log | grep "log-event"
+tail -f /tmp/reticle-debug.log | grep "log-event"
 
 # Colorized logs (if watch-messages.sh available)
 ./scripts/watch-messages.sh
@@ -400,15 +400,15 @@ tail -f /tmp/mcp-sentinel-debug.log | grep "log-event"
 
 **Normal Operation:**
 ```
-DEBUG mcp_sentinel_gui::core::proxy: Proxy loop started for session session-XXXXX
-DEBUG mcp_sentinel_gui::core::proxy: Out: {"jsonrpc":"2.0","id":"test-agent-1"...}
-DEBUG mcp_sentinel_gui::core::proxy: Emitted log-event: msg-123
+DEBUG reticle::core::proxy: Proxy loop started for session session-XXXXX
+DEBUG reticle::core::proxy: Out: {"jsonrpc":"2.0","id":"test-agent-1"...}
+DEBUG reticle::core::proxy: Emitted log-event: msg-123
 ```
 
 **Errors:**
 ```
-ERROR mcp_sentinel_gui::core::proxy: Failed to parse JSON: ...
-ERROR mcp_sentinel_gui::commands::proxy: Failed to spawn process: ...
+ERROR reticle::core::proxy: Failed to parse JSON: ...
+ERROR reticle::commands::proxy: Failed to spawn process: ...
 ```
 
 ## Troubleshooting
@@ -424,19 +424,19 @@ ERROR mcp_sentinel_gui::commands::proxy: Failed to spawn process: ...
 
 1. **Check if events are being emitted:**
    ```bash
-   grep "Emitted log-event" /tmp/mcp-sentinel-debug.log
+   grep "Emitted log-event" /tmp/reticle-debug.log
    ```
    If no results, backend is not emitting events.
 
 2. **Check if proxy is reading data:**
    ```bash
-   grep "Out:" /tmp/mcp-sentinel-debug.log
+   grep "Out:" /tmp/reticle-debug.log
    ```
    If no results, child process is not producing output.
 
 3. **Check if child process started:**
    ```bash
-   grep "Spawning" /tmp/mcp-sentinel-debug.log
+   grep "Spawning" /tmp/reticle-debug.log
    ```
 
 **Common Causes & Solutions:**
@@ -475,7 +475,7 @@ Args: scripts/run-mock-pair.sh --iterations 30
 
 1. **Check error message in terminal:**
    ```bash
-   grep ERROR /tmp/mcp-sentinel-debug.log | tail -5
+   grep ERROR /tmp/reticle-debug.log | tail -5
    ```
 
 2. **Common errors:**
@@ -606,7 +606,7 @@ lsof -ti:3001 | xargs kill -9
 
 3. **Check terminal logs:**
    ```bash
-   grep "SSE PROXY" /tmp/mcp-sentinel-debug.log
+   grep "SSE PROXY" /tmp/reticle-debug.log
    ```
 
 **Solutions:**
@@ -665,12 +665,12 @@ Args: custom_mcp_client.py | python3 scripts/mock-mcp-server.py
 
 1. **Claude Desktop:**
    - Configure claude_desktop_config.json
-   - Point to MCP Sentinel as proxy
+   - Point to Reticle as proxy
    - Monitor all Claude ↔ Server traffic
 
 2. **MCP Inspector:**
    - Use MCP Inspector as client
-   - MCP Sentinel as monitoring layer
+   - Reticle as monitoring layer
    - Compare both tools' views
 
 ### Automated Testing
@@ -697,10 +697,10 @@ time bash scripts/run-mock-pair.sh --iterations 1000 --delay 0
 
 # Monitor memory usage
 # macOS:
-top -pid $(pgrep -f mcp-sentinel)
+top -pid $(pgrep -f reticle)
 
 # Linux:
-htop -p $(pgrep -f mcp-sentinel)
+htop -p $(pgrep -f reticle)
 ```
 
 ### Debugging Tips
@@ -754,7 +754,7 @@ htop -p $(pgrep -f mcp-sentinel)
 
 **Check logs:**
 ```bash
-tail -f /tmp/mcp-sentinel-debug.log | grep -E "log-event|ERROR"
+tail -f /tmp/reticle-debug.log | grep -E "log-event|ERROR"
 ```
 
 ### Common Commands
@@ -767,7 +767,7 @@ tail -f /tmp/mcp-sentinel-debug.log | grep -E "log-event|ERROR"
 ./scripts/verify-project.sh
 
 # View logs
-tail -f /tmp/mcp-sentinel-debug.log
+tail -f /tmp/reticle-debug.log
 
 # Test SSE server
 python3 scripts/mock-mcp-sse-server.py --port 8080

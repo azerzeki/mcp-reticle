@@ -1,4 +1,4 @@
-//! MCP Sentinel - Desktop GUI Application
+//! Reticle - Desktop GUI Application
 //!
 //! A debugging tool for Model Context Protocol (MCP) servers that intercepts
 //! and displays JSON-RPC messages in real-time.
@@ -9,6 +9,7 @@
 //! - Tauri backend (Rust) for proxy logic and system integration
 //! - React frontend for UI and message visualization
 //! - Dual transport support: stdio and HTTP/SSE
+//! - Core library (reticle-core) for protocol types and token counting
 
 // Prevents additional console window on Windows in release mode
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]

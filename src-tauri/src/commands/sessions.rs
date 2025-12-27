@@ -87,9 +87,21 @@ pub async fn get_session_metadata(
         ended_at: session.ended_at,
         transport: session.metadata.transport,
         server_name: session.metadata.server_id.as_ref().map(|s| s.name.clone()),
-        server_version: session.metadata.server_id.as_ref().and_then(|s| s.version.clone()),
-        server_command: session.metadata.server_id.as_ref().map(|s| s.command.clone()),
-        connection_type: session.metadata.server_id.as_ref().map(|s| s.connection_type.clone()),
+        server_version: session
+            .metadata
+            .server_id
+            .as_ref()
+            .and_then(|s| s.version.clone()),
+        server_command: session
+            .metadata
+            .server_id
+            .as_ref()
+            .map(|s| s.command.clone()),
+        connection_type: session
+            .metadata
+            .server_id
+            .as_ref()
+            .map(|s| s.connection_type.clone()),
         tags: session.metadata.tags,
         message_count: session.metadata.message_count,
         duration_ms: session.metadata.duration_ms,
