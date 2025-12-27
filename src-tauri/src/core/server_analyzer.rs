@@ -136,13 +136,13 @@ pub enum AnalysisError {
 impl std::fmt::Display for AnalysisError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            AnalysisError::ProcessStartFailed(msg) => write!(f, "Process start failed: {}", msg),
+            AnalysisError::ProcessStartFailed(msg) => write!(f, "Process start failed: {msg}"),
             AnalysisError::InitializationFailed(msg) => {
-                write!(f, "Initialization failed: {}", msg)
+                write!(f, "Initialization failed: {msg}")
             }
-            AnalysisError::Timeout(msg) => write!(f, "Timeout: {}", msg),
-            AnalysisError::InvalidResponse(msg) => write!(f, "Invalid response: {}", msg),
-            AnalysisError::IoError(msg) => write!(f, "IO error: {}", msg),
+            AnalysisError::Timeout(msg) => write!(f, "Timeout: {msg}"),
+            AnalysisError::InvalidResponse(msg) => write!(f, "Invalid response: {msg}"),
+            AnalysisError::IoError(msg) => write!(f, "IO error: {msg}"),
         }
     }
 }
@@ -460,7 +460,7 @@ impl ServerAnalyzer {
             let description_tokens = TokenCounter::estimate_tokens(&description);
             let schema_tokens = tool
                 .get("inputSchema")
-                .map(|s| TokenCounter::count_json_tokens(s))
+                .map(TokenCounter::count_json_tokens)
                 .unwrap_or(0);
 
             let total_tokens = name_tokens + description_tokens + schema_tokens;
@@ -477,7 +477,9 @@ impl ServerAnalyzer {
         }
 
         // Sort by token count descending
-        analysis.tools.sort_by(|a, b| b.total_tokens.cmp(&a.total_tokens));
+        analysis
+            .tools
+            .sort_by(|a, b| b.total_tokens.cmp(&a.total_tokens));
 
         Ok(analysis)
     }
@@ -544,8 +546,10 @@ impl ServerAnalyzer {
                     args.iter()
                         .map(|arg| {
                             let arg_name = arg.get("name").and_then(|n| n.as_str()).unwrap_or("");
-                            let arg_desc =
-                                arg.get("description").and_then(|d| d.as_str()).unwrap_or("");
+                            let arg_desc = arg
+                                .get("description")
+                                .and_then(|d| d.as_str())
+                                .unwrap_or("");
                             TokenCounter::estimate_tokens(arg_name)
                                 + TokenCounter::estimate_tokens(arg_desc)
                         })

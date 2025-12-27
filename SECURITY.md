@@ -32,7 +32,7 @@ We take security seriously. If you discover a security vulnerability in Reticle,
 This security policy applies to:
 
 - The Reticle desktop application
-- The mcp-sentinel CLI proxy
+- The reticle CLI proxy
 - Official releases and builds
 
 ### Out of Scope

@@ -65,7 +65,7 @@ impl AppState {
     fn default_storage_path() -> PathBuf {
         // Use application data directory
         let mut path = dirs::data_dir().unwrap_or_else(|| PathBuf::from("."));
-        path.push("mcp-sentinel");
+        path.push("reticle");
         path.push("sessions.db");
         path
     }

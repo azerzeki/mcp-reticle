@@ -1,3 +1,5 @@
+//! Transport types for MCP communication
+
 use serde::{Deserialize, Serialize};
 use std::fmt;
 
@@ -95,5 +97,74 @@ pub enum TransportError {
 impl From<TransportError> for String {
     fn from(err: TransportError) -> String {
         err.to_string()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_transport_type_display() {
+        assert_eq!(TransportType::Stdio.to_string(), "stdio");
+        assert_eq!(TransportType::Http.to_string(), "http");
+        assert_eq!(TransportType::Streamable.to_string(), "streamable");
+        assert_eq!(TransportType::WebSocket.to_string(), "websocket");
+    }
+
+    #[test]
+    fn test_transport_config_type() {
+        let stdio = TransportConfig::Stdio {
+            command: "test".to_string(),
+            args: vec![],
+        };
+        assert_eq!(stdio.transport_type(), TransportType::Stdio);
+
+        let http = TransportConfig::Http {
+            server_url: "http://localhost".to_string(),
+            proxy_port: 3000,
+        };
+        assert_eq!(http.transport_type(), TransportType::Http);
+    }
+
+    #[test]
+    fn test_is_demo() {
+        let demo1 = TransportConfig::Stdio {
+            command: "".to_string(),
+            args: vec![],
+        };
+        assert!(demo1.is_demo());
+
+        let demo2 = TransportConfig::Stdio {
+            command: "demo".to_string(),
+            args: vec![],
+        };
+        assert!(demo2.is_demo());
+
+        let real = TransportConfig::Stdio {
+            command: "npx".to_string(),
+            args: vec!["-y".to_string()],
+        };
+        assert!(!real.is_demo());
+    }
+
+    #[test]
+    fn test_transport_config_serialization() {
+        let config = TransportConfig::Stdio {
+            command: "npx".to_string(),
+            args: vec!["-y".to_string(), "mcp-server".to_string()],
+        };
+
+        let json = serde_json::to_string(&config).unwrap();
+        assert!(json.contains("stdio"));
+        assert!(json.contains("npx"));
+
+        let parsed: TransportConfig = serde_json::from_str(&json).unwrap();
+        if let TransportConfig::Stdio { command, args } = parsed {
+            assert_eq!(command, "npx");
+            assert_eq!(args, vec!["-y", "mcp-server"]);
+        } else {
+            panic!("Wrong config type");
+        }
     }
 }

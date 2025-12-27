@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - Initial public release
-- stdio transport proxy (mcp-sentinel)
+- stdio transport proxy (reticle)
 - HTTP/SSE transport support
 - Real-time JSON-RPC message inspection
 - Request/response correlation

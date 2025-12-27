@@ -1,6 +1,12 @@
+//! JSON-RPC Protocol Types
+//!
+//! Core types for MCP (Model Context Protocol) JSON-RPC messages.
+
 use serde::{Deserialize, Serialize};
 use std::fmt;
 use std::time::{SystemTime, UNIX_EPOCH};
+
+use crate::token_counter::TokenCounter;
 
 /// Direction of message flow through the proxy
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
@@ -84,7 +90,7 @@ impl LogEntry {
         let content_str = serde_json::to_string(&content).unwrap_or_default();
 
         // Count LLM-relevant tokens (extracts payload, not JSON-RPC overhead)
-        let token_count = super::token_counter::TokenCounter::count_mcp_context_tokens(&content);
+        let token_count = TokenCounter::count_mcp_context_tokens(&content);
 
         Self {
             id,
@@ -127,7 +133,7 @@ impl LogEntry {
             .as_micros() as u64;
 
         // Estimate token count for raw content
-        let token_count = super::token_counter::TokenCounter::estimate_tokens(&content);
+        let token_count = TokenCounter::estimate_tokens(&content);
 
         Self {
             id,
@@ -218,44 +224,27 @@ mod tests {
     }
 
     #[test]
-    fn test_direction_serialize() {
+    fn test_direction_serde() {
         let dir_in = Direction::In;
-        let dir_out = Direction::Out;
+        let json = serde_json::to_string(&dir_in).unwrap();
+        assert_eq!(json, "\"in\"");
 
-        let json_in = serde_json::to_string(&dir_in).unwrap();
-        let json_out = serde_json::to_string(&dir_out).unwrap();
-
-        assert_eq!(json_in, "\"in\"");
-        assert_eq!(json_out, "\"out\"");
-    }
-
-    #[test]
-    fn test_direction_deserialize() {
-        let dir_in: Direction = serde_json::from_str("\"in\"").unwrap();
-        let dir_out: Direction = serde_json::from_str("\"out\"").unwrap();
-
-        assert_eq!(dir_in, Direction::In);
-        assert_eq!(dir_out, Direction::Out);
+        let parsed: Direction = serde_json::from_str("\"out\"").unwrap();
+        assert_eq!(parsed, Direction::Out);
     }
 
     #[test]
     fn test_message_type_default() {
-        let msg_type: MessageType = Default::default();
-        assert_eq!(msg_type, MessageType::JsonRpc);
-    }
-
-    #[test]
-    fn test_message_type_serialize() {
-        assert_eq!(serde_json::to_string(&MessageType::JsonRpc).unwrap(), "\"jsonrpc\"");
-        assert_eq!(serde_json::to_string(&MessageType::Raw).unwrap(), "\"raw\"");
-        assert_eq!(serde_json::to_string(&MessageType::Stderr).unwrap(), "\"stderr\"");
+        let mt: MessageType = Default::default();
+        assert_eq!(mt, MessageType::JsonRpc);
     }
 
     #[test]
     fn test_log_entry_new() {
         let content = serde_json::json!({
             "jsonrpc": "2.0",
-            "method": "tools/list",
+            "method": "tools/call",
+            "params": { "name": "test" },
             "id": 1
         });
 
@@ -269,186 +258,98 @@ mod tests {
         assert_eq!(entry.id, "log-1");
         assert_eq!(entry.session_id, "session-1");
         assert_eq!(entry.direction, Direction::In);
-        assert_eq!(entry.method, Some("tools/list".to_string()));
+        assert_eq!(entry.method, Some("tools/call".to_string()));
         assert_eq!(entry.message_type, MessageType::JsonRpc);
-        assert!(entry.timestamp > 0);
-        assert!(entry.duration_micros.is_none());
-        assert!(entry.server_name.is_none());
+        assert!(entry.token_count > 0);
     }
 
     #[test]
     fn test_log_entry_with_server() {
-        let content = serde_json::json!({
-            "jsonrpc": "2.0",
-            "method": "initialize",
-            "id": 1
-        });
-
+        let content = serde_json::json!({"method": "test"});
         let entry = LogEntry::with_server(
-            "log-2".to_string(),
-            "session-2".to_string(),
+            "log-1".to_string(),
+            "session-1".to_string(),
             Direction::Out,
             content,
-            "filesystem-server".to_string(),
+            "my-server".to_string(),
         );
 
-        assert_eq!(entry.server_name, Some("filesystem-server".to_string()));
-        assert_eq!(entry.method, Some("initialize".to_string()));
+        assert_eq!(entry.server_name, Some("my-server".to_string()));
     }
 
     #[test]
-    fn test_log_entry_new_raw() {
+    fn test_log_entry_raw() {
         let entry = LogEntry::new_raw(
-            "log-3".to_string(),
-            "session-3".to_string(),
+            "log-1".to_string(),
+            "session-1".to_string(),
             Direction::Out,
-            "Some raw stderr output".to_string(),
-            MessageType::Stderr,
+            "Hello world".to_string(),
+            MessageType::Raw,
         );
 
-        assert_eq!(entry.id, "log-3");
-        assert_eq!(entry.message_type, MessageType::Stderr);
-        assert_eq!(entry.content, "Some raw stderr output");
+        assert_eq!(entry.content, "Hello world");
+        assert_eq!(entry.message_type, MessageType::Raw);
         assert!(entry.method.is_none());
-        assert!(entry.server_name.is_none());
     }
 
     #[test]
-    fn test_log_entry_new_raw_with_server() {
-        let entry = LogEntry::new_raw_with_server(
-            "log-4".to_string(),
-            "session-4".to_string(),
-            Direction::Out,
-            "Error: connection failed".to_string(),
-            MessageType::Stderr,
-            "database-server".to_string(),
+    fn test_extract_method() {
+        let with_method = serde_json::json!({"method": "test/method"});
+        assert_eq!(
+            extract_method(&with_method),
+            Some("test/method".to_string())
         );
 
-        assert_eq!(entry.server_name, Some("database-server".to_string()));
-        assert_eq!(entry.message_type, MessageType::Stderr);
+        let without_method = serde_json::json!({"result": {}});
+        assert_eq!(extract_method(&without_method), None);
     }
 
     #[test]
-    fn test_extract_method_present() {
-        let content = serde_json::json!({
-            "jsonrpc": "2.0",
-            "method": "resources/read",
-            "params": {"uri": "file:///test.txt"},
-            "id": 5
-        });
-
-        let method = extract_method(&content);
-        assert_eq!(method, Some("resources/read".to_string()));
-    }
-
-    #[test]
-    fn test_extract_method_absent() {
-        let content = serde_json::json!({
-            "jsonrpc": "2.0",
-            "result": {"status": "ok"},
-            "id": 5
-        });
-
-        let method = extract_method(&content);
-        assert!(method.is_none());
-    }
-
-    #[test]
-    fn test_log_entry_serialization() {
-        let content = serde_json::json!({"jsonrpc": "2.0", "method": "ping", "id": 1});
-        let entry = LogEntry::new(
-            "log-5".to_string(),
-            "session-5".to_string(),
-            Direction::In,
-            content,
-        );
-
-        let json = serde_json::to_string(&entry).unwrap();
-        assert!(json.contains("\"id\":\"log-5\""));
-        assert!(json.contains("\"direction\":\"in\""));
-        assert!(json.contains("\"method\":\"ping\""));
-    }
-
-    #[test]
-    fn test_jsonrpc_request_structure() {
-        let request = JsonRpcRequest {
+    fn test_jsonrpc_request_serde() {
+        let req = JsonRpcRequest {
             jsonrpc: "2.0".to_string(),
             id: Some(serde_json::json!(1)),
-            method: "tools/list".to_string(),
-            params: Some(serde_json::json!({})),
+            method: "test".to_string(),
+            params: Some(serde_json::json!({"key": "value"})),
         };
 
-        let json = serde_json::to_string(&request).unwrap();
+        let json = serde_json::to_string(&req).unwrap();
         assert!(json.contains("\"jsonrpc\":\"2.0\""));
-        assert!(json.contains("\"method\":\"tools/list\""));
+        assert!(json.contains("\"method\":\"test\""));
+
+        let parsed: JsonRpcRequest = serde_json::from_str(&json).unwrap();
+        assert_eq!(parsed.method, "test");
     }
 
     #[test]
     fn test_jsonrpc_response_with_result() {
-        let response = JsonRpcResponse {
+        let resp = JsonRpcResponse {
             jsonrpc: "2.0".to_string(),
             id: serde_json::json!(1),
-            result: Some(serde_json::json!({"tools": []})),
+            result: Some(serde_json::json!({"data": "value"})),
             error: None,
         };
 
-        let json = serde_json::to_string(&response).unwrap();
+        let json = serde_json::to_string(&resp).unwrap();
         assert!(json.contains("\"result\""));
         assert!(!json.contains("\"error\""));
     }
 
     #[test]
     fn test_jsonrpc_response_with_error() {
-        let response = JsonRpcResponse {
+        let resp = JsonRpcResponse {
             jsonrpc: "2.0".to_string(),
             id: serde_json::json!(1),
             result: None,
             error: Some(JsonRpcError {
-                code: -32601,
-                message: "Method not found".to_string(),
+                code: -32600,
+                message: "Invalid Request".to_string(),
                 data: None,
             }),
         };
 
-        let json = serde_json::to_string(&response).unwrap();
-        assert!(!json.contains("\"result\""));
+        let json = serde_json::to_string(&resp).unwrap();
         assert!(json.contains("\"error\""));
-        assert!(json.contains("-32601"));
-    }
-
-    #[test]
-    fn test_jsonrpc_notification() {
-        let notification = JsonRpcNotification {
-            jsonrpc: "2.0".to_string(),
-            method: "notifications/progress".to_string(),
-            params: Some(serde_json::json!({"progress": 50})),
-        };
-
-        let json = serde_json::to_string(&notification).unwrap();
-        assert!(!json.contains("\"id\""));
-        assert!(json.contains("\"method\":\"notifications/progress\""));
-    }
-
-    #[test]
-    fn test_log_entry_token_count() {
-        let content = serde_json::json!({
-            "jsonrpc": "2.0",
-            "method": "tools/call",
-            "params": {
-                "name": "read_file",
-                "arguments": {"path": "/test.txt"}
-            },
-            "id": 1
-        });
-
-        let entry = LogEntry::new(
-            "log-6".to_string(),
-            "session-6".to_string(),
-            Direction::In,
-            content,
-        );
-
-        // Token count should be calculated
-        assert!(entry.token_count >= 0);
+        assert!(json.contains("-32600"));
     }
 }

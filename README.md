@@ -239,11 +239,12 @@ Same pattern — wrap your server command with `reticle`.
 
 ```
 reticle/
-├── src-tauri/              # Rust backend (Tauri wrapper)
+├── crates/
+│   ├── reticle-core/       # Core library (protocol, token counting, storage)
+│   └── reticle-cli/        # Standalone CLI proxy (publishable to crates.io)
+├── src-tauri/              # Tauri desktop app (depends on reticle-core)
 │   ├── src/
-│   │   ├── core/           # Core proxy implementation
-│   │   │   ├── proxy.rs    # stdio proxy loop
-│   │   │   └── protocol.rs # JSON-RPC types
+│   │   ├── core/           # Proxy implementations (uses reticle-core)
 │   │   ├── commands/       # Tauri commands
 │   │   └── main.rs         # Entry point
 │   └── Cargo.toml
@@ -257,7 +258,7 @@ reticle/
 │   ├── mock-mcp-agent.py   # Mock MCP client for testing
 │   ├── mock-mcp-server.py  # Mock MCP server for testing
 │   └── mock-mcp-sse-server.py  # Mock SSE server for testing
-├── Justfile                # Task runner commands
+├── justfile                # Task runner commands
 └── README.md
 ```
 
@@ -279,6 +280,8 @@ just          # Show all available commands
 just setup    # Install dependencies
 just dev      # Start development server
 just build    # Build for production
+just build-cli # Build CLI only
+just test     # Run all tests
 just check    # Check Rust code
 just lint     # Run clippy lints
 just fmt      # Format code
