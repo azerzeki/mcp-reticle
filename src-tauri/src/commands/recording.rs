@@ -452,6 +452,52 @@ pub struct RecordingStatus {
     pub duration_seconds: u64,
 }
 
+/// Add a tag to the current recording session
+#[tauri::command]
+pub async fn add_recording_tag(
+    state: State<'_, AppState>,
+    tag: String,
+) -> Result<(), String> {
+    let recorder_state = state.recorder.lock().await;
+
+    if let Some(recorder) = recorder_state.as_ref() {
+        recorder.add_tag(tag.to_lowercase()).await;
+        Ok(())
+    } else {
+        Err("No active recording".to_string())
+    }
+}
+
+/// Remove a tag from the current recording session
+#[tauri::command]
+pub async fn remove_recording_tag(
+    state: State<'_, AppState>,
+    tag: String,
+) -> Result<(), String> {
+    let recorder_state = state.recorder.lock().await;
+
+    if let Some(recorder) = recorder_state.as_ref() {
+        recorder.remove_tag(&tag).await;
+        Ok(())
+    } else {
+        Err("No active recording".to_string())
+    }
+}
+
+/// Get tags from the current recording session
+#[tauri::command]
+pub async fn get_recording_tags(
+    state: State<'_, AppState>,
+) -> Result<Vec<String>, String> {
+    let recorder_state = state.recorder.lock().await;
+
+    if let Some(recorder) = recorder_state.as_ref() {
+        Ok(recorder.get_tags().await)
+    } else {
+        Err("No active recording".to_string())
+    }
+}
+
 // Helper functions
 
 fn chrono_format(session_id: &str) -> String {

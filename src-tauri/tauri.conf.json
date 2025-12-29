@@ -5,7 +5,7 @@
   "identifier": "com.reticle.app",
   "build": {
     "devUrl": "http://localhost:1420",
-    "beforeBuildCommand": "cd ../frontend && npm run build",
+    "beforeBuildCommand": "npm run build --prefix ../frontend",
     "frontendDist": "../frontend/dist"
   },
   "bundle": {

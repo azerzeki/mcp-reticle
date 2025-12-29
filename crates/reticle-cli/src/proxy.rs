@@ -1,33 +1,38 @@
 //! stdio proxy implementation for CLI
 //!
-//! This module implements a simple stdio proxy that wraps an MCP server
+//! This module implements a bidirectional stdio proxy that wraps an MCP server
 //! process and forwards all traffic while emitting events.
+//!
+//! Supports:
+//! - Forwarding stdin/stdout/stderr between parent and child
+//! - Emitting telemetry events to the Reticle Hub
+//! - Receiving inject commands from the Hub to send messages to the MCP server
 
-use reticle_core::events::EventSink;
+use reticle_core::events::{EventSink, InjectReceiver};
 use reticle_core::protocol::{Direction, LogEntry, MessageType};
+use reticle_core::session_names::create_session_id;
 use std::process::Stdio;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::process::Command;
 
 /// Run a stdio proxy for an MCP server
+///
+/// If `inject_rx` is provided, the proxy will listen for inject commands
+/// from the Reticle Hub and forward them to the MCP server's stdin.
 pub async fn run_stdio_proxy<E: EventSink>(
     command: &str,
     args: &[&str],
     server_name: &str,
     event_sink: E,
+    inject_rx: Option<InjectReceiver>,
 ) -> Result<i32, String> {
-    // Generate session ID
-    let session_id = format!(
-        "session-{}",
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_millis()
-    );
+    // Generate session ID with beautiful name
+    let session = create_session_id(Some(server_name));
+    let session_id = session.id.clone();
 
-    // Emit session started
+    // Emit session started (use display name for UI)
     event_sink
-        .emit_session_started(&session_id, server_name)
+        .emit_session_started(&session_id, &session.name)
         .await
         .map_err(|e| format!("Failed to emit session started: {e}"))?;
 
@@ -49,6 +54,7 @@ pub async fn run_stdio_proxy<E: EventSink>(
     let mut stderr_reader = BufReader::new(child_stderr).lines();
     let mut stdin_reader = BufReader::new(tokio::io::stdin()).lines();
     let mut child_stdin = child_stdin;
+    let mut inject_rx = inject_rx;
 
     let mut log_counter = 0u64;
 
@@ -62,26 +68,31 @@ pub async fn run_stdio_proxy<E: EventSink>(
                         log_counter += 1;
                         let log_id = format!("log-{log_counter}");
 
-                        // Parse as JSON if possible
+                        // Parse as JSON if possible and emit log event
+                        tracing::trace!("stdin: {} bytes, log_id={}", line.len(), log_id);
                         if let Ok(json) = serde_json::from_str::<serde_json::Value>(&line) {
                             let entry = LogEntry::with_server(
-                                log_id,
+                                log_id.clone(),
                                 session_id.clone(),
                                 Direction::In,
                                 json,
                                 server_name.to_string(),
                             );
-                            let _ = event_sink.emit_log(&entry).await;
+                            if let Err(e) = event_sink.emit_log(&entry).await {
+                                tracing::warn!("emit_log error: {}", e);
+                            }
                         } else {
                             let entry = LogEntry::new_raw_with_server(
-                                log_id,
+                                log_id.clone(),
                                 session_id.clone(),
                                 Direction::In,
                                 line.clone(),
                                 MessageType::Raw,
                                 server_name.to_string(),
                             );
-                            let _ = event_sink.emit_log(&entry).await;
+                            if let Err(e) = event_sink.emit_log(&entry).await {
+                                tracing::warn!("emit_log error: {}", e);
+                            }
                         }
 
                         // Forward to child
@@ -114,26 +125,31 @@ pub async fn run_stdio_proxy<E: EventSink>(
                         log_counter += 1;
                         let log_id = format!("log-{log_counter}");
 
-                        // Parse as JSON if possible
+                        // Parse as JSON if possible and emit log event
+                        tracing::trace!("stdout: {} bytes, log_id={}", line.len(), log_id);
                         if let Ok(json) = serde_json::from_str::<serde_json::Value>(&line) {
                             let entry = LogEntry::with_server(
-                                log_id,
+                                log_id.clone(),
                                 session_id.clone(),
                                 Direction::Out,
                                 json,
                                 server_name.to_string(),
                             );
-                            let _ = event_sink.emit_log(&entry).await;
+                            if let Err(e) = event_sink.emit_log(&entry).await {
+                                tracing::warn!("emit_log error: {}", e);
+                            }
                         } else {
                             let entry = LogEntry::new_raw_with_server(
-                                log_id,
+                                log_id.clone(),
                                 session_id.clone(),
                                 Direction::Out,
                                 line.clone(),
                                 MessageType::Raw,
                                 server_name.to_string(),
                             );
-                            let _ = event_sink.emit_log(&entry).await;
+                            if let Err(e) = event_sink.emit_log(&entry).await {
+                                tracing::warn!("emit_log error: {}", e);
+                            }
                         }
 
                         // Forward to parent stdout
@@ -176,6 +192,46 @@ pub async fn run_stdio_proxy<E: EventSink>(
                     }
                     Err(e) => {
                         tracing::error!("Error reading child stderr: {}", e);
+                    }
+                }
+            }
+
+            // Handle inject commands from the Hub (if enabled)
+            message = async {
+                if let Some(ref mut rx) = inject_rx {
+                    rx.recv().await
+                } else {
+                    // If no inject receiver, never complete this branch
+                    std::future::pending::<Option<String>>().await
+                }
+            } => {
+                if let Some(message) = message {
+                    log_counter += 1;
+                    let log_id = format!("inject-{log_counter}");
+
+                    tracing::info!("Injecting message from Hub: {} bytes", message.len());
+
+                    // Log the injected message
+                    if let Ok(json) = serde_json::from_str::<serde_json::Value>(&message) {
+                        let entry = LogEntry::with_server(
+                            log_id.clone(),
+                            session_id.clone(),
+                            Direction::In,
+                            json,
+                            server_name.to_string(),
+                        );
+                        let _ = event_sink.emit_log(&entry).await;
+                    }
+
+                    // Write to child's stdin
+                    if let Err(e) = child_stdin.write_all(message.as_bytes()).await {
+                        tracing::error!("Failed to inject message: {}", e);
+                    } else {
+                        if let Err(e) = child_stdin.write_all(b"\n").await {
+                            tracing::error!("Failed to write newline after inject: {}", e);
+                        }
+                        let _ = child_stdin.flush().await;
+                        tracing::debug!("Injected message successfully");
                     }
                 }
             }

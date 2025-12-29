@@ -1,5 +1,6 @@
 use crate::core::TokenCounter;
 use crate::events::{LogEvent, SessionStartEvent};
+use reticle_core::session_names::generate_session_name;
 
 /// Pre-filled mock data for demo mode
 pub struct MockData {
@@ -17,9 +18,11 @@ impl MockData {
         let base_timestamp = 1734720000000000u64; // Fixed timestamp for consistency
         let server_name_owned = server_name.to_string();
 
+        // Generate a beautiful session name for demo mode
+        let beautiful_name = generate_session_name();
         let session = SessionStartEvent {
             id: session_id.clone(),
-            name: format!("Demo: {server_name}"),
+            name: format!("demo-{}", beautiful_name),
             started_at: base_timestamp,
         };
 
@@ -267,6 +270,8 @@ mod tests {
         let data = MockData::generate_for_server("test-server");
 
         assert_eq!(data.session.id, "demo-session-12345");
+        // Session name should start with "demo-" and have a beautiful name
+        assert!(data.session.name.starts_with("demo-"), "Session name should start with 'demo-'");
 
         // All logs should have the specified server name
         for log in &data.logs {
