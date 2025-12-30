@@ -6,9 +6,9 @@
 
 <p align="center">
   <a href="https://github.com/labterminal/mcp-reticle/blob/main/LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="License: MIT" /></a>
-  <a href="https://modelcontextprotocol.io"><img src="https://img.shields.io/badge/MCP-Compliant-00F0FF.svg" alt="MCP Compliant" /></a>
+  <a href="https://www.npmjs.com/package/mcp-reticle"><img src="https://img.shields.io/npm/v/mcp-reticle.svg" alt="npm" /></a>
+  <a href="https://pypi.org/project/mcp-reticle/"><img src="https://img.shields.io/pypi/v/mcp-reticle.svg" alt="PyPI" /></a>
   <a href="#"><img src="https://img.shields.io/badge/Platform-macOS%20%7C%20Linux%20%7C%20Windows-lightgrey.svg" alt="Platform" /></a>
-  <a href="#"><img src="https://img.shields.io/badge/Rust-1.75+-orange.svg" alt="Rust 1.75+" /></a>
 </p>
 
 <p align="center">
