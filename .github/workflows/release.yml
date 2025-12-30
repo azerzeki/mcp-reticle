@@ -48,17 +48,24 @@ jobs:
         if: matrix.target == 'aarch64-unknown-linux-gnu'
         run: |
           sudo apt-get update
-          sudo apt-get install -y gcc-aarch64-linux-gnu
+          sudo apt-get install -y gcc-aarch64-linux-gnu g++-aarch64-linux-gnu
+          # Configure cargo for cross-compilation
+          mkdir -p ~/.cargo
+          cat >> ~/.cargo/config.toml << EOF
+          [target.aarch64-unknown-linux-gnu]
+          linker = "aarch64-linux-gnu-gcc"
+          EOF
 
       - name: Build CLI
         run: |
-          cargo build --release --target ${{ matrix.target }} --manifest-path crates/reticle-cli/Cargo.toml
+          cd crates/reticle-cli
+          cargo build --release --target ${{ matrix.target }}
 
       - name: Package (Unix)
         if: runner.os != 'Windows'
         run: |
           mkdir -p dist
-          cp target/${{ matrix.target }}/release/reticle dist/
+          cp crates/reticle-cli/target/${{ matrix.target }}/release/reticle dist/
           cd dist
           tar -czvf ${{ matrix.artifact }}.tar.gz reticle
           shasum -a 256 ${{ matrix.artifact }}.tar.gz > ${{ matrix.artifact }}.tar.gz.sha256
@@ -67,7 +74,7 @@ jobs:
         if: runner.os == 'Windows'
         run: |
           mkdir dist
-          cp target/${{ matrix.target }}/release/reticle.exe dist/
+          cp crates/reticle-cli/target/${{ matrix.target }}/release/reticle.exe dist/
           cd dist
           7z a ${{ matrix.artifact }}.zip reticle.exe
           certutil -hashfile ${{ matrix.artifact }}.zip SHA256 > ${{ matrix.artifact }}.zip.sha256
@@ -140,7 +147,8 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           projectPath: src-tauri
-          args: --target ${{ matrix.target }}
+          tauriScript: cargo tauri
+          args: --target ${{ matrix.target }} --config '{"build":{"beforeBuildCommand":""}}'
 
       - name: Package macOS (DMG + standalone binary)
         if: runner.os == 'macOS'
