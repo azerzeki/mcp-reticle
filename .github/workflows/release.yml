@@ -8,6 +8,7 @@ on:
 permissions:
   contents: write
   id-token: write
+  packages: write
 
 env:
   CARGO_TERM_COLOR: always
@@ -313,6 +314,21 @@ jobs:
           npm publish --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Publish to GitHub Packages
+        run: |
+          # Configure npm for GitHub Packages
+          echo "@labterminal:registry=https://npm.pkg.github.com" > ~/.npmrc
+          echo "//npm.pkg.github.com/:_authToken=${{ secrets.GITHUB_TOKEN }}" >> ~/.npmrc
+
+          # Update package name with scope for GitHub Packages
+          cd packages/npm
+          jq '.name = "@labterminal/mcp-reticle"' package.json > tmp.json && mv tmp.json package.json
+
+          # Publish to GitHub Packages
+          npm publish --access public || echo "GitHub Packages publish failed or package exists"
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   publish-pypi:
     name: Publish to PyPI
